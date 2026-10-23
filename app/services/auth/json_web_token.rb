@@ -1,7 +1,7 @@
 module Auth
   class JsonWebToken
     ALGORITHM = "HS256".freeze
-    ISSUER = "trita-api".freeze
+    ISSUER = "#{Rails.configuration.x.app.slug}-api".freeze
     MIN_SECRET_LENGTH = 64
 
     class << self

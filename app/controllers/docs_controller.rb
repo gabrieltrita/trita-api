@@ -8,7 +8,7 @@ class DocsController < ActionController::API
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>trita-api · Docs</title>
+        <title>#{ERB::Util.html_escape(Rails.configuration.x.app.slug)}-api · Docs</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@#{SWAGGER_UI_VERSION}/swagger-ui.css">
       </head>
       <body>

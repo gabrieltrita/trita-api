@@ -1,7 +1,7 @@
 module TokenResponder
   extend ActiveSupport::Concern
 
-  REFRESH_COOKIE = "trita_refresh".freeze
+  REFRESH_COOKIE = "#{Rails.configuration.x.app.slug}_refresh".freeze
   REFRESH_COOKIE_PATH = "/api/v1/auth".freeze
 
   private

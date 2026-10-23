@@ -38,7 +38,7 @@ docker compose up -d --build
 docker compose exec api bin/rails db:seed
 ```
 
-The seed creates a confirmed admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) and, in development, `user@trita.dev` / `User@123456`. The admin must enable 2FA (see below) before using the admin endpoints.
+The seed creates a confirmed admin (`ADMIN_EMAIL`, default `admin@<domain>`, / `ADMIN_PASSWORD`) and, in development, `user@<domain>` / `User@123456`, where `<domain>` comes from `config/app.yml`. The admin must enable 2FA (see below) before using the admin endpoints.
 
 If a port is already taken, change `API_PORT`, `DB_PORT`, `REDIS_PORT`, `MAILHOG_SMTP_PORT`, `MAILHOG_WEB_PORT` or `ADMINER_PORT` in `.env`. Use `BIND_ADDRESS=0.0.0.0` only to reach the API from another device on your network.
 
@@ -95,11 +95,24 @@ app/
   models/            User, RefreshToken, AuditLog, Consent, Current
   policies/          Pundit
   services/auth/     JsonWebToken, TokenIssuer, RefreshTokenRotator, TokenDenylist, TwoFactorChallenge
-lib/trita/           EnvValidator
+lib/                 EnvValidator, rake tasks
+config/app.yml       app identity (name, slug, domain)
 config/schedule.yml  sidekiq-cron schedule
 docs/                openapi.yaml, SECURITY.md
 spec/                RSpec
 ```
+
+## App identity
+
+`config/app.yml` is the single source of the app's identity; a fork changes these three values:
+
+| Key | Example | Drives |
+|---|---|---|
+| `name` | `Trita` | Email subjects, default sender name, the 2FA account label in authenticator apps |
+| `slug` | `trita` | JWT issuer (`trita-api`), refresh cookie (`trita_refresh`), database names (`trita_api_development`), Redis cache namespace, data export file name, Swagger page title |
+| `domain` | `trita.dev` | Default sender `no-reply@<domain>` and the seed users' emails |
+
+`slug` must contain only lowercase letters, digits and underscores, because it becomes part of database names. Code reads the values through `Rails.configuration.x.app`.
 
 ## Production
 

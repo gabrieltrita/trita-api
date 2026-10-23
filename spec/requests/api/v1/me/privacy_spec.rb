@@ -26,8 +26,8 @@ RSpec.describe "LGPD: consents and data export", type: :request do
     end
 
     it "keeps the device user agent as evidence of the consent" do
-      post "/api/v1/me/consents", params: { kind: "marketing", granted: true }, headers: auth_headers(user).merge("User-Agent" => "TritaTest/1.0"), as: :json
-      expect(user.consents.order(:created_at).last.user_agent).to eq("TritaTest/1.0")
+      post "/api/v1/me/consents", params: { kind: "marketing", granted: true }, headers: auth_headers(user).merge("User-Agent" => "TestAgent/1.0"), as: :json
+      expect(user.consents.order(:created_at).last.user_agent).to eq("TestAgent/1.0")
     end
 
     it "does not allow revoking a required consent" do
@@ -48,7 +48,7 @@ RSpec.describe "LGPD: consents and data export", type: :request do
       get "/api/v1/me/export", headers: auth_headers(user)
 
       expect(response).to have_http_status(:ok)
-      expect(response.headers["Content-Disposition"]).to include("attachment")
+      expect(response.headers["Content-Disposition"]).to eq(%(attachment; filename="#{Rails.configuration.x.app.slug}-data-#{Date.current.iso8601}.json"))
       expect(json.keys).to include("exported_at", "profile", "consents", "sessions", "activity")
       expect(json.dig("profile", "email")).to eq("titular@example.com")
       expect(json["consents"].size).to eq(2)

@@ -15,7 +15,7 @@ Rails.application.configure do
     config.action_controller.perform_caching = false
   end
 
-  config.cache_store = :redis_cache_store, { url: ENV.fetch("REDIS_URL", "redis://localhost:6379/1") }
+  config.cache_store = :redis_cache_store, { url: ENV.fetch("REDIS_URL", "redis://localhost:6379/1"), namespace: config.x.app.slug }
 
   config.action_mailer.perform_caching = false
 

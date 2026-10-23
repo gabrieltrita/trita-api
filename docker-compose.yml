@@ -29,7 +29,6 @@ x-app: &app
 services:
   api:
     <<: *app
-    container_name: trita-api
     command: ./bin/rails server -b 0.0.0.0 -p 3000
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-3000}:3000"
@@ -42,7 +41,6 @@ services:
 
   sidekiq:
     <<: *app
-    container_name: trita-sidekiq
     command: bundle exec sidekiq -C config/sidekiq.yml
     depends_on:
       api:
@@ -50,7 +48,6 @@ services:
 
   db:
     image: postgres:17-alpine
-    container_name: trita-db
     environment:
       POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
@@ -66,7 +63,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: trita-redis
     command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
@@ -82,7 +78,6 @@ services:
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
-    container_name: trita-mailhog
     platform: linux/amd64
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${MAILHOG_SMTP_PORT:-1025}:1025"
@@ -90,7 +85,6 @@ services:
 
   adminer:
     image: adminer:4
-    container_name: trita-adminer
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${ADMINER_PORT:-8080}:8080"
     environment:

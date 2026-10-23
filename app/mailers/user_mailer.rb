@@ -15,7 +15,7 @@ class UserMailer < ApplicationMailer
   def welcome(user)
     @user = user
     @login_url = frontend_url("/login")
-    mail to: @user.email, subject: "Welcome to Trita!"
+    mail to: @user.email, subject: "Welcome to #{app.name}!"
   end
 
   def password_reset(user)

@@ -1,7 +1,7 @@
 module TwoFactorAuthenticatable
   extend ActiveSupport::Concern
 
-  OTP_ISSUER = "Trita".freeze
+  OTP_ISSUER = Rails.configuration.x.app.name.freeze
   OTP_DRIFT = 30
   BACKUP_CODES_COUNT = 10
 
@@ -82,7 +82,7 @@ module TwoFactorAuthenticatable
   end
 
   def backup_code_digest(code)
-    key = Rails.application.key_generator.generate_key("trita/otp-backup-codes", 32)
+    key = Rails.application.key_generator.generate_key("two_factor/backup_codes", 32)
     OpenSSL::HMAC.hexdigest("SHA256", key, code.to_s.downcase.gsub(/[^a-z0-9]/, ""))
   end
 end

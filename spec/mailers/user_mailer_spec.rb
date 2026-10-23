@@ -12,6 +12,25 @@ RSpec.describe UserMailer, type: :mailer do
     CGI.unescape(text_of(mail)[/#{Regexp.escape("#{frontend}#{path}?token=")}(\S+)/, 1])
   end
 
+  describe "sender" do
+    around do |example|
+      original = ENV.delete("MAILER_FROM")
+      example.run
+    ensure
+      original ? ENV["MAILER_FROM"] = original : ENV.delete("MAILER_FROM")
+    end
+
+    it "defaults to no-reply at the app domain" do
+      app = Rails.configuration.x.app
+      expect(described_class.welcome(user)[:from].value).to eq("#{app.name} <no-reply@#{app.domain}>")
+    end
+
+    it "uses MAILER_FROM when set" do
+      ENV["MAILER_FROM"] = "Support <support@example.com>"
+      expect(described_class.welcome(user)[:from].value).to eq("Support <support@example.com>")
+    end
+  end
+
   it "sends the confirmation link with a token that confirms this user" do
     pending_user = create(:user, :unconfirmed)
     mail = described_class.confirmation_instructions(pending_user)
@@ -33,7 +52,7 @@ RSpec.describe UserMailer, type: :mailer do
     mail = described_class.welcome(user)
 
     expect(mail.to).to eq([ user.email ])
-    expect(mail.subject).to eq("Welcome to Trita!")
+    expect(mail.subject).to eq("Welcome to #{Rails.configuration.x.app.name}!")
     expect(text_of(mail)).to include("#{frontend}/login")
   end
 

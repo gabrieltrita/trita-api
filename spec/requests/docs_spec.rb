@@ -33,7 +33,7 @@ RSpec.describe "OpenAPI documentation", type: :request do
   it "serves Swagger UI and the spec file" do
     get "/docs"
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("swagger-ui")
+    expect(response.body).to include("swagger-ui", "<title>#{Rails.configuration.x.app.slug}-api · Docs</title>")
 
     get "/docs/openapi.yaml"
     expect(response).to have_http_status(:ok)

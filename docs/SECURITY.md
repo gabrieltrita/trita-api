@@ -17,11 +17,11 @@ How trita-api protects accounts and personal data, and the procedures to operate
 | Account takeover after compromise | Any password change revokes every session; email change requires the password and confirmation at the new address with a notice to the old one |
 | Privilege escalation | Role always read from the database; Pundit policies; admins cannot change their own role; admin area requires 2FA |
 | Host header attacks | `config.hosts` from `APP_HOSTS` in production |
-| Weak production configuration | `Trita::EnvValidator` refuses to boot with missing or weak secrets |
+| Weak production configuration | `EnvValidator` refuses to boot with missing or weak secrets |
 
 ## Authentication
 
-- **Access token**: JWT HS256, 15 minutes, claims `sub`, `sid` (session), `jti`, `type=access`, `iss=trita-api`.
+- **Access token**: JWT HS256, 15 minutes, claims `sub`, `sid` (session), `jti`, `type=access`, `iss=<slug>-api` (`slug` from `config/app.yml`), so tokens from another app that shares the secret are rejected.
 - **Refresh token**: 64 random bytes, 30 days, stored as SHA-256. Each refresh revokes the previous token with reason `rotated` and issues a new one in the same session (`family_id`).
 - **Reuse detection** only fires for tokens revoked by rotation. Tokens revoked by logout, password change or anonymization simply return `invalid_token`, so an old device cannot log the user out of a fresh session.
 - **2FA**: TOTP (RFC 6238) with 30 s drift tolerance and replay protection (`otp_last_used_step`). Ten single-use backup codes stored as HMAC-SHA256 keyed from `secret_key_base`. Login with 2FA returns a 5-minute single-use `challenge_token`.
@@ -82,7 +82,7 @@ Change the value, restart the services that use it, and rotate any copy in CI or
 
 ## Production checklist
 
-- [ ] All variables validated by `Trita::EnvValidator` are set (the app refuses to boot otherwise)
+- [ ] All variables validated by `EnvValidator` are set (the app refuses to boot otherwise)
 - [ ] `CORS_ORIGINS` lists only `https://` front-end origins
 - [ ] `APP_HOSTS` lists the API host names
 - [ ] TLS terminates in front of the app (`force_ssl` is on)

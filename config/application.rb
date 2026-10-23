@@ -18,6 +18,8 @@ module TritaApi
 
     config.api_only = true
 
+    config.x.app = config_for(:app)
+
     config.middleware.use ActionDispatch::Cookies
 
     config.time_zone = "America/Sao_Paulo"

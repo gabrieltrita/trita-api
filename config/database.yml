@@ -9,13 +9,13 @@ default: &default
 
 development:
   <<: *default
-  database: trita_api_development
+  database: <%= Rails.configuration.x.app.slug %>_api_development
 
 test:
   <<: *default
-  database: trita_api_test
+  database: <%= Rails.configuration.x.app.slug %>_api_test
 
 production:
   <<: *default
-  database: trita_api_production
+  database: <%= Rails.configuration.x.app.slug %>_api_production
   url: <%= ENV["DATABASE_URL"] %>

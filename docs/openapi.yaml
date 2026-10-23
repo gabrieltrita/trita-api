@@ -9,7 +9,7 @@ info:
     call `POST /auth/refresh` to renew. On a 401, refresh once and retry the request.
 
     **Cookie mode (browser SPA):** send the `X-Token-Transport: cookie` header on login, refresh and confirmation.
-    The refresh token is then delivered only in an httpOnly cookie (`trita_refresh`) and omitted from the JSON. Use `credentials: "include"` with fetch.
+    The refresh token is then delivered only in an httpOnly cookie (`<slug>_refresh`, `trita_refresh` for this app) and omitted from the JSON. Use `credentials: "include"` with fetch.
 
     **Format:** success `{ "data": ..., "meta": ... }` · error `{ "error": { "code", "message", "details" } }`.
 

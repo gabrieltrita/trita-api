@@ -34,10 +34,10 @@ RSpec.describe "Login, lockout and 2FA", type: :request do
     end
 
     it "stores the device user agent on the new session" do
-      login("login@example.com", password, headers: { "User-Agent" => "TritaTest/1.0" })
+      login("login@example.com", password, headers: { "User-Agent" => "TestAgent/1.0" })
 
       expect(response).to have_http_status(:ok)
-      expect(user.refresh_tokens.last.user_agent).to eq("TritaTest/1.0")
+      expect(user.refresh_tokens.last.user_agent).to eq("TestAgent/1.0")
     end
   end
 

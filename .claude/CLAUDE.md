@@ -36,7 +36,8 @@ app/models/                User (+ concerns/two_factor_authenticatable), Refresh
 app/policies/              ApplicationPolicy, UserPolicy, AuditLogPolicy
 app/services/auth/         JsonWebToken, TokenIssuer, RefreshTokenRotator, TokenDenylist, TwoFactorChallenge, Unauthorized/InvalidCredentials/InvalidToken/ReauthenticationFailed
 app/services/user_data_export.rb
-lib/trita/env_validator.rb production boot validation
+lib/env_validator.rb       production boot validation (EnvValidator)
+config/app.yml             app identity (name, slug, domain), read through Rails.configuration.x.app
 lib/tasks/encryption.rake  bin/rails encryption:reencrypt
 docs/openapi.yaml, docs/SECURITY.md
 spec/                      models, requests, mailers, policies, services, controllers (production-only error handling), jobs, lib, tasks; helpers in spec/support (auth_helpers, sentry_helpers)
@@ -44,11 +45,11 @@ spec/                      models, requests, mailers, policies, services, contro
 
 ## Authentication model
 
-- Access token: JWT HS256, 15 min, claims `sub`, `sid` (session = refresh token `family_id`), `jti`, `type: "access"`, `iss: "trita-api"`. Secrets: `JWT_SECRET` plus optional `JWT_SECRET_PREVIOUS` for rotation. Decoding always passes the expected `type`.
+- Access token: JWT HS256, 15 min, claims `sub`, `sid` (session = refresh token `family_id`), `jti`, `type: "access"`, `iss: "<slug>-api"`. Secrets: `JWT_SECRET` plus optional `JWT_SECRET_PREVIOUS` for rotation. Decoding always passes the expected `type`.
 - Refresh token: random 64 bytes, SHA-256 stored, 30 days, rotated on every use within the same `family_id`. `revoked_reason` records why it was revoked; only reuse of a `rotated` token triggers reuse detection (revoke every session, `refresh_token_reused`).
 - Revocation is immediate through `Auth::TokenDenylist` in `Rails.cache` (Redis): per `jti` (logout, used 2FA challenge) and per `sid` (session revoked, password change, reuse).
 - Authenticated requests reject tokens issued before `users.password_changed_at`.
-- Cookie mode: header `X-Token-Transport: cookie` puts the refresh token in `trita_refresh` (httpOnly, SameSite=Strict, path `/api/v1/auth`) and removes it from the JSON. The cookie is only read when the header is present (CSRF defence through CORS preflight).
+- Cookie mode: header `X-Token-Transport: cookie` puts the refresh token in `<slug>_refresh` (httpOnly, SameSite=Strict, path `/api/v1/auth`) and removes it from the JSON. The cookie is only read when the header is present (CSRF defence through CORS preflight).
 - 2FA: TOTP with replay protection and 10 HMAC'd single-use backup codes. Login with 2FA returns a 5-minute single-use `challenge_token` (`type: "2fa_challenge"`). Admins must have 2FA to use `/api/v1/admin/*` and cannot disable it.
 - Lockout: 5 failures lock 15 min, doubling to 24 h; a locked account answers exactly like a wrong password; the owner is emailed; any password change unlocks.
 - Email confirmation is required to log in. Sign-up, password reset and confirmation resend always answer the same way whether the email exists or not.
@@ -63,10 +64,11 @@ spec/                      models, requests, mailers, policies, services, contro
 - Account deletion is anonymization (`User#anonymize!`), never a hard delete, so the audit trail stays consistent.
 - `AuditLog` and `Consent` rows are immutable (`readonly?`). Record sensitive events with `AuditLog.record!(action, target:, actor:, metadata:)`; `metadata` never holds personal data and `action` must be in `AuditLog::ACTIONS`.
 - New sensitive or unauthenticated endpoints get a Rack::Attack throttle in `config/initializers/rack_attack.rb` (the request body is JSON; use `json_param`).
-- Production refuses to boot without strong secrets (`Trita::EnvValidator`); add new required variables there and to `.env.example`.
+- Production refuses to boot without strong secrets (`EnvValidator`); add new required variables there and to `.env.example`.
 
 ## Conventions
 
+- Never hardcode the app name, slug or domain in code, config, seeds or specs: read `Rails.configuration.x.app` (`name`, `slug`, `domain`). Only `config/app.yml` and the `TritaApi` module name may contain them.
 - Responses: `{ data, meta }`; errors through `render_error(status:, code:, message:, details:)` or the exceptions handled in `ErrorHandling`. Validation details: `{ field => [ { code, message } ] }`.
 - Serialization with Blueprinter; pagination with Pagy (`pagy(scope)` + `pagination_meta`, `limit` up to 100).
 - Controllers live under `Api::V1`; unauthenticated actions use `skip_before_action :authenticate_user!`.
@@ -86,6 +88,7 @@ docker compose exec api bundle exec rspec
 ```
 
 - Host ports bind to `127.0.0.1` (`BIND_ADDRESS`) and are configurable (`API_PORT`, `DB_PORT`, `REDIS_PORT`, `MAILHOG_SMTP_PORT`, `MAILHOG_WEB_PORT`, `ADMINER_PORT`). On the owner's machine another project uses 3000/5432/1025/8025, so the local `.env` uses API 3100, Postgres 5433, MailHog 1026/8026, Adminer 8081.
+- Compose names containers `<project>-<service>-1` (for example `trita-api-1`); always address services by name (`docker compose exec api`). The Redis cache (JWT denylist, Rack::Attack) is namespaced by `slug`; Sidekiq does not support namespaces, so apps sharing a Redis need separate databases or instances.
 - Redis requires `REDIS_PASSWORD`; it must also appear in `REDIS_URL` and `SIDEKIQ_REDIS_URL`.
 - Tests can run on the host against the compose Postgres (`.env` points to localhost). Rack::Attack is disabled in tests except in `spec/requests/rack_attack_spec.rb`; the test cache store is `:memory_store`.
 - Coverage report: `coverage/index.html` locally, `coverage` artifact in CI. `with_sentry` (spec/support/sentry_helpers.rb) initializes Sentry with an in-memory transport for specs that assert on reported errors.
@@ -99,3 +102,5 @@ docker compose exec api bundle exec rspec
 - `docs/openapi.yaml` must match the routes exactly, including `PUT` aliases generated by `resources`.
 - `rescue_from StandardError` in `ErrorHandling` is only registered outside development and test, so the 500 path is tested through a production-like anonymous controller in `spec/controllers/concerns/error_handling_spec.rb`.
 - Rotating the deterministic encryption key is not supported in place; see `docs/SECURITY.md`.
+- `Auth::JsonWebToken::ISSUER`, `TokenResponder::REFRESH_COOKIE` and `TwoFactorAuthenticatable::OTP_ISSUER` are computed from `config/app.yml` when the classes load: restart after editing it. Changing `slug` in a deployed app invalidates every token, refresh cookie and cached denylist entry.
+- The backup code HMAC key is derived with the fixed label `two_factor/backup_codes`; never tie it to the app name, or a rename invalidates every user's backup codes.

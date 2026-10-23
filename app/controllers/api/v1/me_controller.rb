@@ -59,7 +59,7 @@ module Api
 
       def export
         AuditLog.record!("user.data_exported", target: current_user)
-        response.headers["Content-Disposition"] = %(attachment; filename="trita-dados-#{Date.current.iso8601}.json")
+        response.headers["Content-Disposition"] = %(attachment; filename="#{Rails.configuration.x.app.slug}-data-#{Date.current.iso8601}.json")
         render json: UserDataExport.new(current_user).as_json
       end
 

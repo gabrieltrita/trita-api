@@ -25,7 +25,7 @@ Rails.application.configure do
   config.hosts = ENV.fetch("APP_HOSTS", "").split(",").map(&:strip)
   config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 
-  config.cache_store = :redis_cache_store, { url: ENV.fetch("REDIS_URL") }
+  config.cache_store = :redis_cache_store, { url: ENV.fetch("REDIS_URL"), namespace: config.x.app.slug }
 
   config.action_mailer.default_url_options = { host: ENV.fetch("APP_HOST", "example.com"), protocol: "https" }
   config.action_mailer.delivery_method = :smtp

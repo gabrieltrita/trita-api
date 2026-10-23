@@ -30,7 +30,7 @@ RSpec.describe "Me::TwoFactor", type: :request do
 
     post "/api/v1/me/two_factor/setup", params: { current_password: "Senha@123" }, headers: headers, as: :json
     expect(response).to have_http_status(:ok)
-    expect(json.dig("data", "provisioning_uri")).to start_with("otpauth://totp/Trita")
+    expect(json.dig("data", "provisioning_uri")).to start_with("otpauth://totp/#{Rails.configuration.x.app.name}")
 
     post "/api/v1/me/two_factor/enable", params: { code: "000000" }, headers: headers, as: :json
     expect(response).to have_http_status(:unprocessable_content)

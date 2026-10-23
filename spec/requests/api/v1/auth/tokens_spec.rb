@@ -30,7 +30,7 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
     end
 
     it "rejects an unsigned token (alg none)" do
-      claims = { sub: user.id, sid: SecureRandom.uuid, type: "access", iss: "trita-api", exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: SecureRandom.uuid }
+      claims = { sub: user.id, sid: SecureRandom.uuid, type: "access", iss: Auth::JsonWebToken::ISSUER, exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: SecureRandom.uuid }
       unsigned = JWT.encode(claims, nil, "none")
 
       get "/api/v1/me", headers: bearer(unsigned)
@@ -39,7 +39,7 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
     end
 
     it "rejects a token signed with another secret" do
-      forged = JWT.encode({ sub: user.id, type: "access", iss: "trita-api", exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: "x" }, "another-secret", "HS256")
+      forged = JWT.encode({ sub: user.id, type: "access", iss: Auth::JsonWebToken::ISSUER, exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: "x" }, "another-secret", "HS256")
       get "/api/v1/me", headers: bearer(forged)
       expect(response).to have_http_status(:unauthorized)
       expect(json.dig("error", "code")).to eq("invalid_token")
@@ -152,7 +152,7 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
       expect(response).to have_http_status(:ok)
       expect(json.dig("data", "tokens")).not_to have_key("refresh_token")
       set_cookie = Array(response.headers["Set-Cookie"]).join("\n")
-      expect(set_cookie).to match(/trita_refresh=/)
+      expect(set_cookie).to include("#{TokenResponder::REFRESH_COOKIE}=")
       expect(set_cookie).to match(/httponly/i)
       expect(set_cookie).to match(/samesite=strict/i)
       expect(set_cookie).to include("path=/api/v1/auth")
