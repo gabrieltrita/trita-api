@@ -25,6 +25,11 @@ RSpec.describe "LGPD: consents and data export", type: :request do
       expect(AuditLog.where(action: "user.consent_changed", target_id: user.id)).to exist
     end
 
+    it "keeps the device user agent as evidence of the consent" do
+      post "/api/v1/me/consents", params: { kind: "marketing", granted: true }, headers: auth_headers(user).merge("User-Agent" => "TritaTest/1.0"), as: :json
+      expect(user.consents.order(:created_at).last.user_agent).to eq("TritaTest/1.0")
+    end
+
     it "does not allow revoking a required consent" do
       post "/api/v1/me/consents", params: { kind: "terms", granted: false }, headers: auth_headers(user), as: :json
       expect(response).to have_http_status(:unprocessable_content)

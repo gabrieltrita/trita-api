@@ -113,6 +113,34 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
       post "/api/v1/auth/refresh", params: { refresh_token: tokens[:refresh_token] }, as: :json
       expect(response).to have_http_status(:unauthorized)
     end
+
+    it "rejects an unknown refresh token" do
+      post "/api/v1/auth/refresh", params: { refresh_token: "not-a-real-token" }, as: :json
+      expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("invalid_token")
+    end
+
+    it "rejects a refresh token issued before the password changed, even if it was not revoked" do
+      tokens = tokens_for(user)
+      travel(1.minute) { user.update_columns(password_changed_at: Time.current) }
+
+      post "/api/v1/auth/refresh", params: { refresh_token: tokens[:refresh_token] }, as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "rejects the loser of two concurrent refreshes with the same token" do
+      tokens = tokens_for(user)
+      allow_any_instance_of(RefreshToken).to receive(:lock!).and_wrap_original do |lock, *args|
+        RefreshToken.where(id: lock.receiver.id).update_all(revoked_at: Time.current, revoked_reason: "logout")
+        lock.call(*args)
+      end
+
+      expect {
+        post "/api/v1/auth/refresh", params: { refresh_token: tokens[:refresh_token] }, as: :json
+      }.not_to change(RefreshToken, :count)
+      expect(response).to have_http_status(:unauthorized)
+      expect(AuditLog.where(action: "auth.refresh_reuse_detected")).not_to exist
+    end
   end
 
   describe "cookie mode (X-Token-Transport: cookie)" do
@@ -161,6 +189,19 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
 
       get "/api/v1/me", headers: bearer(other[:access_token])
       expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "logs out a token without a session id and leaves the other sessions alive" do
+      other = tokens_for(user)
+      token = Auth::JsonWebToken.encode({ sub: user.id, type: "access" }, expires_at: 15.minutes.from_now)
+
+      delete "/api/v1/auth/logout", headers: bearer(token), as: :json
+      expect(response).to have_http_status(:no_content)
+
+      get "/api/v1/me", headers: bearer(token)
+      expect(response).to have_http_status(:unauthorized)
+      get "/api/v1/me", headers: bearer(other[:access_token])
+      expect(response).to have_http_status(:ok)
     end
   end
 end

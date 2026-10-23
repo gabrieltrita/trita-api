@@ -11,6 +11,34 @@ RSpec.describe "Me", type: :request do
       expect(json["data"]).to include("email_confirmed" => true, "two_factor_enabled" => false, "pending_email" => nil)
       expect(json["data"].keys).not_to include("password_digest", "otp_secret", "otp_backup_code_digests")
     end
+
+    it "rejects a valid token whose user no longer exists" do
+      token = Auth::JsonWebToken.encode({ sub: SecureRandom.uuid, sid: SecureRandom.uuid, type: "access" }, expires_at: 15.minutes.from_now)
+      get "/api/v1/me", headers: bearer(token)
+      expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("invalid_token")
+    end
+
+    it "expires tokens issued before the password changed, even without a revocation" do
+      headers = auth_headers(user)
+      travel(1.second) { user.update_columns(password_changed_at: Time.current) }
+
+      travel(2.seconds) do
+        get "/api/v1/me", headers: headers
+        expect(response).to have_http_status(:unauthorized)
+        expect(json.dig("error", "code")).to eq("session_expired")
+      end
+    end
+
+    it "identifies the user to Sentry by id only when Sentry is enabled" do
+      with_sentry do
+        allow(Sentry).to receive(:set_user).and_call_original
+
+        get "/api/v1/me", headers: auth_headers(user)
+        expect(response).to have_http_status(:ok)
+        expect(Sentry).to have_received(:set_user).with(id: user.id)
+      end
+    end
   end
 
   describe "PATCH /api/v1/me" do
@@ -22,6 +50,12 @@ RSpec.describe "Me", type: :request do
       expect(user).to be_user
       expect(user.email).to eq("eu@example.com")
     end
+
+    it "returns per-field errors for an invalid profile" do
+      patch "/api/v1/me", params: { first_name: "" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "details", "first_name", 0, "code")).to eq("blank")
+    end
   end
 
   describe "PATCH /api/v1/me/password" do
@@ -29,6 +63,13 @@ RSpec.describe "Me", type: :request do
       patch "/api/v1/me/password", params: { current_password: "Errada@123", password: "Nova@1234" }, headers: auth_headers(user), as: :json
       expect(response).to have_http_status(:unprocessable_content)
       expect(json.dig("error", "code")).to eq("invalid_current_password")
+    end
+
+    it "rejects a weak new password and keeps the old one" do
+      patch "/api/v1/me/password", params: { current_password: "Senha@123", password: "weak", password_confirmation: "weak" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "details", "password").map { |e| e["code"] }).to include("too_short")
+      expect(user.reload.authenticate("Senha@123")).to be_truthy
     end
 
     it "changes the password, invalidates every old token and returns a new session" do
@@ -93,6 +134,12 @@ RSpec.describe "Me", type: :request do
     it "rejects an invalid email" do
       patch "/api/v1/me/email", params: { email: "nao-e-email", current_password: "Senha@123" }, headers: auth_headers(user), as: :json
       expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "rejects the current email as the new one" do
+      patch "/api/v1/me/email", params: { email: "eu@example.com", current_password: "Senha@123" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "details", "email", 0, "code")).to eq("same_as_current")
     end
   end
 

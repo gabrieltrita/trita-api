@@ -46,4 +46,9 @@ RSpec.describe Trita::EnvValidator do
   it "requires https CORS origins" do
     expect(described_class.new(valid_env.merge("CORS_ORIGINS" => "http://app.trita.dev")).errors.join).to match(/https/)
   end
+
+  it "reports a missing encryption key only as not set" do
+    errors = described_class.new(valid_env.except("AR_ENCRYPTION_PRIMARY_KEY")).errors
+    expect(errors).to eq([ "AR_ENCRYPTION_PRIMARY_KEY is not set" ])
+  end
 end

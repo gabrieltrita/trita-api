@@ -32,6 +32,13 @@ RSpec.describe "Login, lockout and 2FA", type: :request do
       expect(response).to have_http_status(:forbidden)
       expect(json.dig("error", "code")).to eq("email_not_confirmed")
     end
+
+    it "stores the device user agent on the new session" do
+      login("login@example.com", password, headers: { "User-Agent" => "TritaTest/1.0" })
+
+      expect(response).to have_http_status(:ok)
+      expect(user.refresh_tokens.last.user_agent).to eq("TritaTest/1.0")
+    end
   end
 
   describe "progressive lockout" do
@@ -92,6 +99,26 @@ RSpec.describe "Login, lockout and 2FA", type: :request do
       login("dois@example.com", password)
       post "/api/v1/auth/two_factor", params: { challenge_token: json.dig("data", "challenge_token"), code: codes.first }, as: :json
       expect(response).to have_http_status(:ok)
+    end
+
+    it "rejects a pending challenge once the account gets locked" do
+      login("dois@example.com", password)
+      challenge = json.dig("data", "challenge_token")
+      5.times { user.register_failed_login! }
+
+      post "/api/v1/auth/two_factor", params: { challenge_token: challenge, code: otp_code(user) }, as: :json
+      expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("invalid_token")
+    end
+
+    it "rejects a pending challenge once the account is deleted" do
+      login("dois@example.com", password)
+      challenge = json.dig("data", "challenge_token")
+      user.anonymize!
+
+      post "/api/v1/auth/two_factor", params: { challenge_token: challenge, code: "123456" }, as: :json
+      expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("invalid_token")
     end
   end
 end

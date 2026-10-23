@@ -137,4 +137,29 @@ RSpec.describe User do
       expect(user.otp_backup_code_digests).not_to include(codes.first)
     end
   end
+
+  describe "confirmation" do
+    it "keeps the original confirmation time when confirmed again" do
+      user = create(:user, confirmed_at: 2.days.ago.change(usec: 0))
+      expect { user.confirm! }.not_to change { user.reload.confirmed_at }
+    end
+
+    it "refuses to confirm an email change that was never requested" do
+      user = create(:user)
+      expect { user.confirm_email_change! }.to raise_error(ActiveRecord::RecordInvalid)
+    end
+  end
+
+  describe "enabling 2FA" do
+    it "does nothing before the setup generated a secret" do
+      user = create(:user)
+      expect(user.enable_two_factor!("123456")).to be_nil
+      expect(user.reload).not_to be_two_factor_enabled
+    end
+
+    it "does nothing when 2FA is already enabled" do
+      user = create(:user, :with_2fa)
+      expect { expect(user.enable_two_factor!(otp_code(user))).to be_nil }.not_to change { user.reload.otp_backup_code_digests }
+    end
+  end
 end

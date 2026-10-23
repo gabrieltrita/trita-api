@@ -58,6 +58,34 @@ RSpec.describe "Registration and email confirmation", type: :request do
         expect(json.dig("error", "details")).not_to have_key("email")
         expect(json.dig("error", "details", "password").map { |e| e["code"] }).to include("too_short", "weak_password")
       end
+
+      context "when another sign-up with the same email commits first" do
+        let!(:existing) { create(:user, email: "novo@example.com") }
+
+        before do
+          allow_any_instance_of(User).to receive(:save!).and_wrap_original { |save, *| save.call(validate: false) }
+        end
+
+        it "hits the unique index, notifies the owner and answers the same way" do
+          allow(User).to receive(:find_by).and_return(nil, existing)
+
+          expect {
+            post "/api/v1/auth/register", params: params, as: :json
+          }.to have_enqueued_mail(UserMailer, :registration_attempt).and change(User, :count).by(0)
+
+          expect(response).to have_http_status(:accepted)
+        end
+
+        it "answers the same way when the competing account is gone" do
+          allow(User).to receive(:find_by).and_return(nil, nil)
+
+          expect {
+            post "/api/v1/auth/register", params: params, as: :json
+          }.not_to have_enqueued_mail
+
+          expect(response).to have_http_status(:accepted)
+        end
+      end
     end
   end
 

@@ -31,6 +31,23 @@ RSpec.describe "Admin::Users", type: :request do
     expect(json["data"].map { |u| u["id"] }).to eq([ target.id ])
   end
 
+  it "filters by role and ignores an unknown role" do
+    user
+    get "/api/v1/admin/users", params: { role: "admin" }, headers: auth_headers(admin)
+    expect(json["data"].map { |u| u["id"] }).to eq([ admin.id ])
+
+    get "/api/v1/admin/users", params: { role: "superuser" }, headers: auth_headers(admin)
+    expect(json.dig("meta", "total")).to eq(2)
+  end
+
+  it "shows a user with the admin view" do
+    get "/api/v1/admin/users/#{user.id}", headers: auth_headers(admin)
+
+    expect(response).to have_http_status(:ok)
+    expect(json.dig("data", "id")).to eq(user.id)
+    expect(json.dig("data", "email")).to eq(user.email)
+  end
+
   it "creates a confirmed admin and audits it" do
     post "/api/v1/admin/users",
       params: { email: "novoadmin@example.com", first_name: "New", password: "Admin@123", role: "admin" },
@@ -41,6 +58,22 @@ RSpec.describe "Admin::Users", type: :request do
     expect(created).to be_admin
     expect(created).to be_confirmed
     expect(AuditLog.find_by(action: "user.created", target_id: created.id).actor).to eq(admin)
+  end
+
+  it "returns per-field errors when creating an invalid user" do
+    post "/api/v1/admin/users", params: { email: "not-an-email", password: "short" }, headers: auth_headers(admin), as: :json
+
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(json.dig("error", "code")).to eq("validation_failed")
+    expect(json.dig("error", "details").keys).to include("email", "password")
+  end
+
+  it "updates profile fields and audits which fields changed" do
+    patch "/api/v1/admin/users/#{user.id}", params: { first_name: "Renamed" }, headers: auth_headers(admin), as: :json
+
+    expect(response).to have_http_status(:ok)
+    expect(user.reload.first_name).to eq("Renamed")
+    expect(AuditLog.find_by(action: "user.updated", target_id: user.id).metadata).to eq("fields" => [ "first_name" ])
   end
 
   it "promotes a user to admin and records who did it" do

@@ -16,7 +16,7 @@ module Authenticatable
   end
 
   def current_session_id
-    current_token_payload&.dig("sid")
+    current_token_payload["sid"]
   end
 
   def authenticate_user!

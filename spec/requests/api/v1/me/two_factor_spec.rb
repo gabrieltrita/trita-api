@@ -3,6 +3,26 @@ require "rails_helper"
 RSpec.describe "Me::TwoFactor", type: :request do
   let(:user) { create(:user, password: "Senha@123") }
 
+  it "shows the 2FA status" do
+    get "/api/v1/me/two_factor", headers: auth_headers(user)
+    expect(response).to have_http_status(:ok)
+    expect(json["data"]).to eq("enabled" => false, "required" => false, "backup_codes_remaining" => 0)
+  end
+
+  context "without 2FA enabled" do
+    it "cannot disable it" do
+      delete "/api/v1/me/two_factor", params: { current_password: "Senha@123" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "code")).to eq("two_factor_not_enabled")
+    end
+
+    it "cannot regenerate backup codes" do
+      post "/api/v1/me/two_factor/backup_codes", params: { current_password: "Senha@123" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "code")).to eq("two_factor_not_enabled")
+    end
+  end
+
   it "enables 2FA in two steps and ends the other sessions" do
     current = tokens_for(user)
     other = tokens_for(user)
@@ -33,6 +53,14 @@ RSpec.describe "Me::TwoFactor", type: :request do
 
   context "with 2FA enabled" do
     let(:user) { create(:user, :with_2fa, password: "Senha@123") }
+
+    it "does not restart the setup and keeps the current secret" do
+      secret = user.otp_secret
+      post "/api/v1/me/two_factor/setup", params: { current_password: "Senha@123" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "code")).to eq("two_factor_already_enabled")
+      expect(user.reload.otp_secret).to eq(secret)
+    end
 
     it "disables with password and code and emails the user" do
       expect {

@@ -64,7 +64,7 @@ module ErrorHandling
   end
 
   def handle_internal_error(error)
-    Rails.logger.error("[#{error.class}] #{error.message}\n#{error.backtrace&.first(10)&.join("\n")}")
+    Rails.logger.error("[#{error.class}] #{error.message}\n#{Array(error.backtrace).first(10).join("\n")}")
     Sentry.capture_exception(error) if Sentry.initialized?
     render_error(status: :internal_server_error, code: "internal_error", message: "Internal server error")
   end

@@ -68,10 +68,6 @@ class User < ApplicationRecord
     update!(confirmed_at: Time.current) unless confirmed?
   end
 
-  def request_email_change!(new_email)
-    update!(unconfirmed_email: new_email)
-  end
-
   def confirm_email_change!
     raise ActiveRecord::RecordInvalid, self if unconfirmed_email.blank?
 
