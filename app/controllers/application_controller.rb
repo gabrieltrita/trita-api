@@ -1,7 +1,7 @@
 class ApplicationController < ActionController::API
   include ActionController::Cookies
   include Pundit::Authorization
-  include Pagy::Backend
+  include Pagy::Method
   include ErrorHandling
   include Authenticatable
   include TokenResponder

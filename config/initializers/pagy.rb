@@ -1,7 +1,2 @@
-require "pagy/extras/overflow"
-
-Pagy::DEFAULT[:limit] = 20
-Pagy::DEFAULT[:limit_max] = 100
-Pagy::DEFAULT[:overflow] = :empty_page
-
-require "pagy/extras/limit"
+Pagy::OPTIONS[:limit] = 20
+Pagy::OPTIONS[:client_limit] = 100

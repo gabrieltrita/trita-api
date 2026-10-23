@@ -10,7 +10,7 @@ module Paginatable
       total: pagy.count,
       pages: pagy.pages,
       next: pagy.next,
-      prev: pagy.prev
+      prev: pagy.previous
     }
   end
 end
