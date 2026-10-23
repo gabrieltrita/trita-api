@@ -25,13 +25,24 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
       travel 16.minutes do
         get "/api/v1/me", headers: headers
         expect(response).to have_http_status(:unauthorized)
+        expect(json.dig("error", "code")).to eq("invalid_token")
       end
     end
 
+    it "rejects an unsigned token (alg none)" do
+      claims = { sub: user.id, sid: SecureRandom.uuid, type: "access", iss: "trita-api", exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: SecureRandom.uuid }
+      unsigned = JWT.encode(claims, nil, "none")
+
+      get "/api/v1/me", headers: bearer(unsigned)
+      expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("invalid_token")
+    end
+
     it "rejects a token signed with another secret" do
-      forged = JWT.encode({ sub: user.id, type: "access", iss: "trita-api", exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: "x" }, "outro-segredo", "HS256")
+      forged = JWT.encode({ sub: user.id, type: "access", iss: "trita-api", exp: 1.hour.from_now.to_i, iat: Time.current.to_i, jti: "x" }, "another-secret", "HS256")
       get "/api/v1/me", headers: bearer(forged)
       expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("invalid_token")
     end
 
     it "accepts tokens signed with the previous secret during rotation (JWT_SECRET_PREVIOUS)" do

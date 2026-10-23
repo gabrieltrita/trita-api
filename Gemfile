@@ -7,7 +7,7 @@ gem "bootsnap", require: false
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
 gem "bcrypt", "~> 3.1.7"
-gem "jwt", "~> 2.9"
+gem "jwt", "~> 3.3"
 
 gem "rotp", "~> 6.3"
 
