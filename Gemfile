@@ -18,9 +18,9 @@ gem "rack-cors"
 gem "rack-attack"
 
 gem "redis", "~> 6.0"
-gem "sidekiq", "~> 8.0"
+gem "sidekiq", "~> 8.1"
 gem "sidekiq-cron", "~> 2.0"
-gem "connection_pool", "~> 2.5"
+gem "connection_pool", "~> 3.0"
 
 gem "sentry-ruby", "~> 7.1"
 gem "sentry-rails", "~> 7.1"
