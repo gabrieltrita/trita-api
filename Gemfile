@@ -26,7 +26,7 @@ gem "sentry-ruby", "~> 7.1"
 gem "sentry-rails", "~> 7.1"
 gem "sentry-sidekiq", "~> 7.1"
 
-gem "pagy", "~> 9.3"
+gem "pagy", "~> 43.8"
 
 gem "blueprinter", "~> 1.1"
 
