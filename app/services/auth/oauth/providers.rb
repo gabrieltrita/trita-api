@@ -2,7 +2,7 @@ module Auth
   module Oauth
     module Providers
       DEFAULT = "google".freeze
-      VERIFIERS = { "google" => GoogleVerifier }.freeze
+      VERIFIERS = { "google" => GoogleVerifier, "apple" => AppleVerifier }.freeze
 
       def self.supported?(provider)
         VERIFIERS.key?(provider.to_s)

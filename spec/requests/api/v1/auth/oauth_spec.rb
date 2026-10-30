@@ -139,6 +139,12 @@ RSpec.describe "Auth::Oauth", type: :request do
         expect(user.last_name.length).to eq(100)
       end
 
+      it "keeps the name from the token over the one the client sends" do
+        google_login(extra: consents.merge(first_name: "Impostor", last_name: "Other"))
+
+        expect(User.find_by(email: "person@example.com")).to have_attributes(first_name: "Person", last_name: "Example")
+      end
+
       it "accepts a Google profile without a family name" do
         google_login(google_id_token(family_name: nil), extra: consents)
 

@@ -120,6 +120,17 @@ RSpec.describe "Me::Identities", type: :request do
       expect(response).to have_http_status(:created)
     end
 
+    context "with an Apple token" do
+      include_context "with apple oauth"
+
+      it "links the Apple account" do
+        link(provider: "apple", id_token: apple_id_token(sub: "apple-new", email: "relay@privaterelay.appleid.com"), current_password: "Senha@123")
+
+        expect(response).to have_http_status(:created)
+        expect(json["data"]).to include("provider" => "apple", "email_at_link" => "relay@privaterelay.appleid.com")
+      end
+    end
+
     it "keeps the account unlinked when the password is wrong" do
       link(current_password: "Errada@123")
 
@@ -128,8 +139,8 @@ RSpec.describe "Me::Identities", type: :request do
       expect(user.identities).to be_empty
     end
 
-    it "rejects a provider that is not supported yet" do
-      link(provider: "apple", current_password: "Senha@123")
+    it "rejects a provider that is not supported" do
+      link(provider: "myspace", current_password: "Senha@123")
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(json.dig("error", "details", "provider", 0, "code")).to eq("inclusion")

@@ -1,5 +1,8 @@
 module Auth
   class OauthSignin
+    PRIVATE_RELAY_DOMAIN = "privaterelay.appleid.com".freeze
+    DEFAULT_FIRST_NAME = "User".freeze
+
     class ConsentRequired < StandardError
       attr_reader :kinds
 
@@ -67,7 +70,13 @@ module Auth
     end
 
     def first_name
-      (@claims.given_name.presence || @claims.email.split("@").first).first(100)
+      (@claims.given_name.presence || email_name).first(100)
+    end
+
+    def email_name
+      return DEFAULT_FIRST_NAME if @claims.email.downcase.end_with?("@#{PRIVATE_RELAY_DOMAIN}")
+
+      @claims.email.split("@").first
     end
   end
 end

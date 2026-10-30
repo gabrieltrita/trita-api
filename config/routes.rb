@@ -26,6 +26,7 @@ Rails.application.routes.draw do
         post   "password/forgot", to: "passwords#forgot"
         post   "password/reset",  to: "passwords#reset"
         post   "oauth/google",    to: "oauth#google"
+        post   "oauth/apple",     to: "oauth#apple"
       end
 
       resource :me, only: %i[show update destroy], controller: :me do

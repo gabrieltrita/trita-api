@@ -127,7 +127,7 @@ Starting a new app from this base: follow [docs/FORKING.md](docs/FORKING.md) (re
 
 `Dockerfile` (multi-stage, non-root) is for production; `Dockerfile.dev` is used by docker-compose.
 
-The app refuses to boot in production unless these are set and strong enough: `DATABASE_URL`, `REDIS_URL`, `SIDEKIQ_REDIS_URL`, `JWT_SECRET` (64+), `AR_ENCRYPTION_*` (32+), `APP_HOSTS`, `CORS_ORIGINS` (https only), `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS`, `SIDEKIQ_WEB_USERNAME`, `SIDEKIQ_WEB_PASSWORD` (16+). Optional: `SENTRY_DSN`, `JWT_SECRET_PREVIOUS`, `ENABLE_API_DOCS`, `TERMS_VERSION`, `PRIVACY_VERSION`, `GOOGLE_CLIENT_IDS` (comma-separated Google OAuth client ids: web, iOS, Android; empty disables Google login).
+The app refuses to boot in production unless these are set and strong enough: `DATABASE_URL`, `REDIS_URL`, `SIDEKIQ_REDIS_URL`, `JWT_SECRET` (64+), `AR_ENCRYPTION_*` (32+), `APP_HOSTS`, `CORS_ORIGINS` (https only), `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS`, `SIDEKIQ_WEB_USERNAME`, `SIDEKIQ_WEB_PASSWORD` (16+). Optional: `SENTRY_DSN`, `JWT_SECRET_PREVIOUS`, `ENABLE_API_DOCS`, `TERMS_VERSION`, `PRIVACY_VERSION`, `GOOGLE_CLIENT_IDS` (comma-separated Google OAuth client ids: web, iOS, Android; empty disables Google login), `APPLE_CLIENT_IDS` (comma-separated Apple identifiers: the app's bundle id and the web Services ID; empty disables Apple login).
 
 Logs go to stdout as one JSON object per line. Each request is a single line (lograge) with `time`, `level`, `method`, `path`, `controller`, `action`, `status`, `duration`, `db`, `view`, `request_id`, `user_id` and, on errors, the exception class:
 
@@ -391,3 +391,15 @@ The front end (Google Identity Services on the web, the SDK on mobile) obtains t
 - New email: creates a confirmed account without a password. `accept_terms` and `accept_privacy` are required in this case only (`validation_failed`, `details.accept_terms[].code = required`).
 - 2FA still applies: an account with 2FA gets the usual `challenge_token`.
 - Errors: `oauth_token_invalid` (401), `oauth_email_unverified` (401), `oauth_provider_unavailable` (503, Google's keys could not be fetched). Throttled to 10 requests per minute per IP.
+
+#### Login with Apple
+
+```http
+POST /auth/oauth/apple { "id_token": "...", "first_name": "...", "last_name": "...", "accept_terms": true, "accept_privacy": true }
+```
+
+Same flow, rules and errors as Google, with the Apple identity token. Differences:
+
+- Apple does not put the name in the token. It hands it to the app only on the first authorization, so the client sends `first_name` and `last_name` in the body; they are used only when the account is created and only when the token has no name (the token always wins).
+- The user may hide the email: the account is then created with an `@privaterelay.appleid.com` address, which never matches an existing account, so no automatic link happens. The first name falls back to `User`. Emails to that address only reach the real inbox if your sending domain is registered with Apple's private email relay service (Apple Developer portal, Sign in with Apple, Email Sources).
+- Apps with Sign in with Apple that allow account deletion must also revoke the Apple token on deletion (App Store rule). That needs the Apple private key and an authorization code from the client and is not implemented yet.

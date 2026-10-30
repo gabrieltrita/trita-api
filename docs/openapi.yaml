@@ -288,7 +288,50 @@ paths:
         "422": { $ref: "#/components/responses/ValidationError" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503":
-          description: Google's signing keys could not be fetched (`oauth_provider_unavailable`)
+          description: The provider's signing keys could not be fetched (`oauth_provider_unavailable`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /auth/oauth/apple:
+    post:
+      tags: [Auth]
+      summary: Log in, link or sign up with an Apple identity token
+      description: |
+        Same rules as Google. Apple does not put the name in the token: send `first_name` and `last_name` the first time; they are used only when the account is created and the token has no name.
+        With Hide My Email the account email is an `@privaterelay.appleid.com` address and never matches an existing account.
+        `accept_terms` and `accept_privacy` are required only when an account is created. An account with 2FA gets the usual `challenge_token`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/TokenTransport"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token: { type: string }
+                first_name: { type: string }
+                last_name: { type: string }
+                accept_terms: { type: boolean }
+                accept_privacy: { type: boolean }
+                accept_marketing: { type: boolean }
+      responses:
+        "200":
+          description: Session created or 2FA pending
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SessionResponse"
+                  - $ref: "#/components/schemas/TwoFactorChallengeResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: The provider's signing keys could not be fetched (`oauth_provider_unavailable`)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -488,7 +531,7 @@ paths:
               type: object
               required: [id_token]
               properties:
-                provider: { type: string, enum: [google] }
+                provider: { type: string, enum: [google, apple] }
                 id_token: { type: string }
                 current_password: { type: string, description: "Required when password_set is true" }
                 code: { type: string, description: "Required for accounts without a password; also when 2FA is enabled" }
@@ -987,7 +1030,7 @@ components:
       properties:
         current_password: { type: string, description: "Required when password_set is true" }
         code: { type: string, description: "Required when 2FA is enabled; also the way to re-authenticate when the account has no password" }
-        provider: { type: string, enum: [google], description: "Provider of id_token; defaults to google" }
+        provider: { type: string, enum: [google, apple], description: "Provider of id_token; defaults to google" }
         id_token: { type: string, description: "Fresh provider ID token of an account already linked; re-authenticates an account without a password" }
   responses:
     Session:

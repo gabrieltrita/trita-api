@@ -99,8 +99,26 @@ RSpec.describe "Passwordless accounts", type: :request do
       set_password(id_token: "garbage")
       expect(json.dig("error", "code")).to eq("invalid_provider_token")
 
-      set_password(id_token: google_id_token, provider: "apple")
+      set_password(id_token: google_id_token, provider: "myspace")
       expect(json.dig("error", "code")).to eq("invalid_provider_token")
+    end
+
+    context "with an Apple identity" do
+      include_context "with apple oauth"
+
+      before { user.identities.first.update!(provider: :apple, provider_uid: "apple-sub-1") }
+
+      it "accepts a fresh Apple token" do
+        set_password(provider: "apple", id_token: apple_id_token)
+
+        expect(response).to have_http_status(:ok)
+        expect(user.reload).to be_password_set
+      end
+
+      it "rejects a Google token presented as Apple" do
+        set_password(provider: "apple", id_token: google_id_token)
+        expect(json.dig("error", "code")).to eq("invalid_provider_token")
+      end
     end
 
     it "asks to retry when Google's keys cannot be fetched" do
