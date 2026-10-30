@@ -70,6 +70,12 @@ RSpec.describe "Auth::Oauth (Apple)", type: :request do
     expect(json.dig("error", "code")).to eq("oauth_email_unverified")
   end
 
+  it "requires the id_token" do
+    post "/api/v1/auth/oauth/apple", params: {}, as: :json
+
+    expect(response).to have_http_status(:bad_request)
+  end
+
   it "answers 503 when Apple's keys cannot be fetched" do
     stub_request(:get, AppleOauthHelpers::APPLE_JWKS_URL).to_return(status: 500)
 

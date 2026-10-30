@@ -35,6 +35,12 @@ RSpec.describe "Rate limiting (Rack::Attack)", type: :request do
     expect(response).to have_http_status(:too_many_requests)
   end
 
+  it "throttles Apple login with the same limit as Google" do
+    10.times { post "/api/v1/auth/oauth/apple", params: { id_token: "x" }, as: :json, env: { "REMOTE_ADDR" => "10.5.5.5" } }
+    post "/api/v1/auth/oauth/apple", params: { id_token: "x" }, as: :json, env: { "REMOTE_ADDR" => "10.5.5.5" }
+    expect(response).to have_http_status(:too_many_requests)
+  end
+
   it "throttles linking and unlinking identities with the other re-authenticated actions" do
     user = create(:user)
     5.times { post "/api/v1/me/identities", params: { id_token: "x", current_password: "Errada@123" }, headers: auth_headers(user), as: :json, env: { "REMOTE_ADDR" => "10.4.4.4" } }
