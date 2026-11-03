@@ -20,7 +20,7 @@ info:
     |---|---|---|
     | `validation_failed` | 422 | Invalid payload, see `details` |
     | `bad_request` | 400 | Missing parameter or malformed JSON |
-    | `missing_token` | 401 | No `Authorization` header |
+    | `missing_token` | 401 | No `Authorization` header, or no refresh cookie on `POST /auth/refresh` in cookie mode |
     | `invalid_token` | 401 | Invalid, expired or wrong-type token |
     | `token_revoked` | 401 | Access token revoked by logout |
     | `session_revoked` | 401 | Session ended (device removed, all sessions revoked) |
@@ -147,7 +147,10 @@ paths:
     post:
       tags: [Auth]
       summary: Exchange the refresh token for a new pair (rotation)
-      description: Reusing an already rotated refresh token revokes every session of the user.
+      description: >-
+        Reusing an already rotated refresh token revokes every session of the user.
+        Without a refresh token the answer is 400 `bad_request` in body mode and 401 `missing_token` in cookie mode,
+        where a missing cookie means there is no session.
       security: []
       parameters:
         - $ref: "#/components/parameters/TokenTransport"

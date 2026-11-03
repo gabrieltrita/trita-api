@@ -6,7 +6,11 @@ module Api
 
         def create
           raw = refresh_token_from_request
-          raise ActionController::ParameterMissing, :refresh_token if raw.blank?
+          if raw.blank?
+            raise ::Auth::Unauthorized.new("Missing refresh token", code: "missing_token") if cookie_transport?
+
+            raise ActionController::ParameterMissing, :refresh_token
+          end
 
           user, tokens = ::Auth::RefreshTokenRotator.call(raw, request: request)
           render_session(user, tokens)
