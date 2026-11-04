@@ -91,6 +91,24 @@ RSpec.describe User do
     end
   end
 
+  describe "deactivation" do
+    let(:user) { create(:user) }
+
+    it "keeps the data, revokes every session and can be undone" do
+      tokens_family = Auth::TokenIssuer.call(user)[:refresh_token]
+
+      user.deactivate!
+      expect(user.reload).to be_deactivated
+      expect(User.deactivated).to eq([ user ])
+      expect(User.not_deactivated).to be_empty
+      expect(RefreshToken.find_by_raw_token(tokens_family)).to have_attributes(revoked_reason: "deactivated")
+
+      user.reactivate!
+      expect(user.reload).not_to be_deactivated
+      expect(User.not_deactivated).to eq([ user ])
+    end
+  end
+
   describe "password change" do
     let(:user) { create(:user) }
 

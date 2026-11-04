@@ -9,7 +9,7 @@ module Api
           user = User.authenticate_by(email: email, password: params.require(:password).to_s)
           candidate = user || User.find_by(email: email)
 
-          if candidate&.access_locked?
+          if candidate&.access_locked? || candidate&.deactivated?
             AuditLog.record!("auth.login_blocked", target: candidate, actor: nil)
             raise ::Auth::InvalidCredentials
           end

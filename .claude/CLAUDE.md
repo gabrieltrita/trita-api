@@ -33,7 +33,7 @@ app/controllers/api/v1/notes_controller.rb  example domain module (Note, NotePol
 app/controllers/docs_controller.rb   Swagger UI at /docs (non-production or ENABLE_API_DOCS=true)
 app/controllers/health_controller.rb GET /health (readiness, public); checks in app/services/health_check.rb
 app/jobs/                  MaintenanceCleanupJob (daily, config/schedule.yml)
-app/mailers/user_mailer.rb confirmation, registration_attempt, welcome, password_reset, password_changed, email_change_confirmation, email_change_requested, account_locked, two_factor_disabled
+app/mailers/user_mailer.rb confirmation, registration_attempt, welcome, password_reset, password_changed, email_change_confirmation, email_change_requested, account_locked, account_deactivated, account_reactivated, two_factor_disabled
 app/models/                User (+ concerns/two_factor_authenticatable), RefreshToken, AuditLog, Consent, Identity, Current
 app/policies/              ApplicationPolicy, UserPolicy, AuditLogPolicy
 app/services/auth/         JsonWebToken, TokenIssuer, RefreshTokenRotator, TokenDenylist, TwoFactorChallenge, OauthSignin, oauth/JwksVerifier (+ GoogleVerifier, AppleVerifier), oauth/Providers, oauth/AppleRevoker, Unauthorized/InvalidCredentials/InvalidToken/ReauthenticationFailed/ProviderUnavailable
@@ -63,6 +63,7 @@ spec/                      models, requests, mailers, policies, services, contro
 - Cookie mode: header `X-Token-Transport: cookie` puts the refresh token in `<slug>_refresh` (httpOnly, SameSite=Strict, path `/api/v1/auth`) and removes it from the JSON. The cookie is only read when the header is present (CSRF defence through CORS preflight).
 - 2FA: TOTP with replay protection and 10 HMAC'd single-use backup codes. Login with 2FA returns a 5-minute single-use `challenge_token` (`type: "2fa_challenge"`). Admins must have 2FA to use `/api/v1/admin/*` and cannot disable it.
 - Lockout: 5 failures lock 15 min, doubling to 24 h; a locked account answers exactly like a wrong password; the owner is emailed; any password change unlocks.
+- Deactivation (admin): `deactivated_at` blocks every way of obtaining tokens (answered like a wrong password, without counting a failed attempt) and revokes every session; only an admin reactivates. New sign-in paths must go through `TokenResponder` (`refuse_deactivated!`) or check `deactivated?` themselves.
 - Email confirmation is required to log in. Sign-up, password reset and confirmation resend always answer the same way whether the email exists or not.
 
 ## Security invariants (do not break)

@@ -21,7 +21,7 @@ module Auth
         raise InvalidToken.new("Refresh token reused. Every session has been revoked.", code: "refresh_token_reused")
       end
 
-      raise InvalidToken if record.revoked? || record.expired? || user.anonymized?
+      raise InvalidToken if record.revoked? || record.expired? || user.anonymized? || user.deactivated?
       raise InvalidToken if user.password_changed_at && record.created_at < user.password_changed_at
 
       RefreshToken.transaction do

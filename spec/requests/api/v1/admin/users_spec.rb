@@ -124,6 +124,78 @@ RSpec.describe "Admin::Users", type: :request do
     expect(response).to have_http_status(:forbidden)
   end
 
+  describe "deactivation" do
+    it "deactivates an account, ends its sessions, audits and emails the owner" do
+      headers = auth_headers(user)
+
+      expect {
+        post "/api/v1/admin/users/#{user.id}/deactivate", headers: auth_headers(admin)
+      }.to have_enqueued_mail(UserMailer, :account_deactivated)
+
+      expect(response).to have_http_status(:ok)
+      expect(json["data"]).to include("deactivated" => true)
+      expect(json.dig("data", "deactivated_at")).to be_present
+      expect(AuditLog.where(action: "user.deactivated", target_id: user.id, actor_id: admin.id)).to exist
+
+      get "/api/v1/me", headers: headers
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns an account already deactivated unchanged" do
+      user.deactivate!
+
+      expect {
+        post "/api/v1/admin/users/#{user.id}/deactivate", headers: auth_headers(admin)
+      }.not_to have_enqueued_mail(UserMailer, :account_deactivated)
+
+      expect(response).to have_http_status(:ok)
+      expect(AuditLog.where(action: "user.deactivated")).to be_empty
+    end
+
+    it "does not let admins deactivate themselves" do
+      post "/api/v1/admin/users/#{admin.id}/deactivate", headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:forbidden)
+      expect(admin.reload).not_to be_deactivated
+    end
+
+    it "reactivates an account, audits and emails the owner" do
+      user.deactivate!
+
+      expect {
+        post "/api/v1/admin/users/#{user.id}/reactivate", headers: auth_headers(admin)
+      }.to have_enqueued_mail(UserMailer, :account_reactivated)
+
+      expect(response).to have_http_status(:ok)
+      expect(json["data"]).to include("deactivated" => false, "deactivated_at" => nil)
+      expect(AuditLog.where(action: "user.reactivated", target_id: user.id)).to exist
+      login(user.email, "Senha@123")
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "returns an active account unchanged on reactivation" do
+      expect {
+        post "/api/v1/admin/users/#{user.id}/reactivate", headers: auth_headers(admin)
+      }.not_to have_enqueued_mail(UserMailer, :account_reactivated)
+
+      expect(response).to have_http_status(:ok)
+      expect(AuditLog.where(action: "user.reactivated")).to be_empty
+    end
+
+    it "filters by status and ignores an unknown one" do
+      user.deactivate!
+
+      get "/api/v1/admin/users", params: { status: "deactivated" }, headers: auth_headers(admin)
+      expect(json["data"].map { |u| u["id"] }).to eq([ user.id ])
+
+      get "/api/v1/admin/users", params: { status: "active" }, headers: auth_headers(admin)
+      expect(json["data"].map { |u| u["id"] }).to eq([ admin.id ])
+
+      get "/api/v1/admin/users", params: { status: "gone" }, headers: auth_headers(admin)
+      expect(json.dig("meta", "total")).to eq(2)
+    end
+  end
+
   it "unlocks an account" do
     5.times { user.register_failed_login! }
     post "/api/v1/admin/users/#{user.id}/unlock", headers: auth_headers(admin)

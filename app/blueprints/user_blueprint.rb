@@ -14,5 +14,7 @@ class UserBlueprint < Blueprinter::Base
   view :admin do
     fields :last_sign_in_at, :sign_in_count, :password_changed_at, :confirmed_at, :failed_login_attempts, :locked_until
     field(:locked) { |user, _| user.access_locked? }
+    field :deactivated_at
+    field(:deactivated) { |user, _| user.deactivated? }
   end
 end

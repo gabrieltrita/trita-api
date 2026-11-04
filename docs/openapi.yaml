@@ -26,7 +26,7 @@ info:
     | `session_revoked` | 401 | Session ended (device removed, all sessions revoked) |
     | `session_expired` | 401 | Token issued before a password change |
     | `refresh_token_reused` | 401 | Rotated refresh token reused; every session revoked |
-    | `invalid_credentials` | 401 | Wrong email or password, or locked account |
+    | `invalid_credentials` | 401 | Wrong email or password, or locked or deactivated account |
     | `invalid_two_factor_code` | 401/422 | Wrong TOTP or backup code |
     | `two_factor_challenge_expired` | 401 | Login 2FA challenge already used or expired |
     | `invalid_confirmation_token` | 401 | Bad or expired email confirmation link |
@@ -692,6 +692,7 @@ paths:
         - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
         - { name: role, in: query, schema: { type: string, enum: [user, admin] } }
         - { name: email, in: query, description: Exact match, schema: { type: string } }
+        - { name: status, in: query, description: Active or deactivated accounts; omitted lists both, schema: { type: string, enum: [active, deactivated] } }
       responses:
         "200":
           description: Page of users
@@ -757,6 +758,28 @@ paths:
         - $ref: "#/components/parameters/Id"
       responses:
         "200": { description: Unlocked }
+  /admin/users/{id}/deactivate:
+    post:
+      tags: [Admin]
+      summary: Deactivate the account
+      description: |
+        Revokes every session and blocks login, refresh and social login (answered as `invalid_credentials`) until the
+        account is reactivated. Data is kept. Audited as `user.deactivated` and the owner is emailed. Admins cannot
+        deactivate themselves; an account already deactivated is returned unchanged.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUser" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/users/{id}/reactivate:
+    post:
+      tags: [Admin]
+      summary: Reactivate the account
+      description: Audited as `user.reactivated` and the owner is emailed; an active account is returned unchanged.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUser" }
   /admin/users/{id}/two_factor:
     delete:
       tags: [Admin]
@@ -920,6 +943,8 @@ components:
             failed_login_attempts: { type: integer }
             locked_until: { type: [string, "null"], format: date-time }
             locked: { type: boolean }
+            deactivated_at: { type: [string, "null"], format: date-time }
+            deactivated: { type: boolean }
     AdminUserInput:
       type: object
       properties:
@@ -1083,6 +1108,14 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    AdminUser:
+      description: User as seen by an admin
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: "#/components/schemas/AdminUser" }
     Forbidden:
       description: Forbidden (includes `two_factor_setup_required` and `email_not_confirmed`)
       content:

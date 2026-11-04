@@ -334,17 +334,21 @@ The new email only takes effect after the link sent to it (`FRONTEND_URL/confirm
 ### 10. Admin area (admin with 2FA)
 
 ```http
-GET    /admin/users?page=1&limit=20&role=admin&email=ana@example.com
+GET    /admin/users?page=1&limit=20&role=admin&email=ana@example.com&status=deactivated
 POST   /admin/users              { "email", "first_name", "password", "role" }   (created already confirmed)
 GET    /admin/users/:id
 PATCH  /admin/users/:id          { "role": "admin" } or { "password": "..." }
 DELETE /admin/users/:id          (anonymizes)
 POST   /admin/users/:id/unlock
+POST   /admin/users/:id/deactivate   (suspends the account, keeping its data)
+POST   /admin/users/:id/reactivate
 DELETE /admin/users/:id/two_factor   (lost device: resets 2FA and ends the user's sessions)
 GET    /admin/audit_logs?action_name=user.role_changed&actor_id=...&target_id=...&from=2026-10-01&to=2026-10-31
 ```
 
-Name and phone are encrypted non-deterministically, so the user list can only filter by role and exact email.
+Name and phone are encrypted non-deterministically, so the user list can only filter by role, exact email and status (`active` or `deactivated`).
+
+Deactivating an account sets `deactivated_at`, revokes every session and emails the owner (`account_deactivated`). Until it is reactivated (`account_reactivated` email), login, refresh, social login, email confirmation and the 2FA step answer `401 invalid_credentials`, exactly like a wrong password, without counting as a failed attempt; access tokens already issued answer `401 invalid_token`. Both actions are audited (`user.deactivated`, `user.reactivated`), admins cannot deactivate themselves, and repeating an action returns the user unchanged. Anonymization (`DELETE`) remains the irreversible option.
 
 ### 11. Audit log
 
