@@ -28,7 +28,7 @@ module Authenticatable
     raise Auth::InvalidToken.new("Session revoked", code: "session_revoked") if Auth::TokenDenylist.session_revoked?(payload["sid"])
 
     user = User.not_anonymized.find_by(id: payload["sub"])
-    raise Auth::InvalidToken if user.nil?
+    raise Auth::InvalidToken if user.nil? || user.deactivated?
 
     if user.password_changed_at && payload["iat"].to_i < user.password_changed_at.to_i
       raise Auth::InvalidToken.new("Session expired after a password change", code: "session_expired")

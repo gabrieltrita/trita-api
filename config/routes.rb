@@ -52,6 +52,8 @@ Rails.application.routes.draw do
         resources :users do
           member do
             post :unlock
+            post :deactivate
+            post :reactivate
             delete :two_factor, action: :reset_two_factor
           end
         end

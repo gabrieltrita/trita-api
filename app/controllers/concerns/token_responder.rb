@@ -27,6 +27,7 @@ module TokenResponder
   end
 
   def sign_in_or_challenge(user, provider: nil)
+    refuse_deactivated!(user)
     return sign_in_and_render(user, provider: provider) unless user.two_factor_enabled?
 
     user.reset_failed_logins!
@@ -36,6 +37,7 @@ module TokenResponder
   end
 
   def sign_in_and_render(user, two_factor: false, provider: nil)
+    refuse_deactivated!(user)
     user.reset_failed_logins!
     user.track_sign_in!
     Current.user = user
@@ -43,6 +45,13 @@ module TokenResponder
     metadata[:provider] = provider if provider
     AuditLog.record!("auth.login", target: user, actor: user, metadata: metadata)
     render_session(user, Auth::TokenIssuer.call(user, request: request))
+  end
+
+  def refuse_deactivated!(user)
+    return unless user.deactivated?
+
+    AuditLog.record!("auth.login_blocked", target: user, actor: nil)
+    raise Auth::InvalidCredentials
   end
 
   def refresh_token_from_request

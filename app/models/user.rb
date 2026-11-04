@@ -49,6 +49,8 @@ class User < ApplicationRecord
   validate :password_or_identity_present
 
   scope :not_anonymized, -> { where(anonymized_at: nil) }
+  scope :deactivated, -> { where.not(deactivated_at: nil) }
+  scope :not_deactivated, -> { where(deactivated_at: nil) }
 
   before_save :track_password_change, if: :will_save_change_to_password_digest?
   after_update_commit :on_password_changed, if: :saved_change_to_password_digest?
@@ -106,6 +108,19 @@ class User < ApplicationRecord
   def revoke_session!(family_id, reason: "session_revoked")
     Auth::TokenDenylist.revoke_session(family_id)
     refresh_tokens.where(family_id: family_id, revoked_at: nil).update_all(revoked_at: Time.current, revoked_reason: reason)
+  end
+
+  def deactivated?
+    deactivated_at.present?
+  end
+
+  def deactivate!
+    update_columns(deactivated_at: Time.current, updated_at: Time.current)
+    revoke_all_sessions!(reason: "deactivated")
+  end
+
+  def reactivate!
+    update_columns(deactivated_at: nil, updated_at: Time.current)
   end
 
   def access_locked?

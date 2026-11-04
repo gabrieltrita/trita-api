@@ -56,6 +56,17 @@ class UserMailer < ApplicationMailer
     mail to: @user.email, subject: "Your account was temporarily locked"
   end
 
+  def account_deactivated(user)
+    @user = user
+    mail to: @user.email, subject: "Your account was deactivated"
+  end
+
+  def account_reactivated(user)
+    @user = user
+    @login_url = frontend_url("/login")
+    mail to: @user.email, subject: "Your account was reactivated"
+  end
+
   def two_factor_disabled(user)
     @user = user
     @forgot_url = frontend_url("/forgot-password")

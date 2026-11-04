@@ -99,6 +99,22 @@ RSpec.describe UserMailer, type: :mailer do
     expect(text_of(mail)).to include("#{frontend}/forgot-password")
   end
 
+  it "tells the owner the account was deactivated" do
+    mail = described_class.account_deactivated(user)
+
+    expect(mail.to).to eq([ user.email ])
+    expect(mail.subject).to eq("Your account was deactivated")
+    expect(text_of(mail)).to include(Rails.configuration.x.app.name)
+  end
+
+  it "tells the owner the account was reactivated" do
+    mail = described_class.account_reactivated(user)
+
+    expect(mail.to).to eq([ user.email ])
+    expect(mail.subject).to eq("Your account was reactivated")
+    expect(text_of(mail)).to include("#{frontend}/login")
+  end
+
   it "tells the owner 2FA was disabled" do
     mail = described_class.two_factor_disabled(user)
 
