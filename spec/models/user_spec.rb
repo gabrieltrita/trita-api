@@ -154,7 +154,7 @@ RSpec.describe User do
   end
 
   describe "#anonymize!" do
-    let(:user) { create(:user, :with_2fa, email: "titular@example.com", first_name: "Joana", phone: "+5511911112222") }
+    let(:user) { create(:user, :with_2fa, email: "titular@example.com", first_name: "Joana", phone: "+5511911112222", time_zone: "Europe/Lisbon") }
 
     it "removes personal data, keeps encryption and ends sessions" do
       tokens_for(user)
@@ -165,6 +165,7 @@ RSpec.describe User do
       expect(user.email).to eq("anon-#{user.id}@anonymized.invalid")
       expect(user.first_name).to eq("Deleted")
       expect(user.phone).to be_nil
+      expect(user.time_zone).to eq(User::DEFAULT_TIME_ZONE)
       expect(user).not_to be_two_factor_enabled
       expect(user.refresh_tokens.active).to be_empty
       expect(User.find_by(email: "titular@example.com")).to be_nil

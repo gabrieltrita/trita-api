@@ -313,10 +313,12 @@ Passwords need 8 to 72 characters with uppercase, lowercase and a digit.
 
 ```http
 GET   /me
-PATCH /me       { "first_name": "...", "last_name": "...", "phone": "..." }
+PATCH /me       { "first_name": "...", "last_name": "...", "phone": "...", "time_zone": "America/Sao_Paulo" }
 PATCH /me/email { "email": "new@example.com", "current_password": "..." }   -> 202
 POST  /auth/email/confirm { "token": "..." }
 ```
+
+`time_zone` is an IANA name (`America/Sao_Paulo` by default, `inclusion` for anything else) that features such as reminders use to pick the user's local time. Only `GET /me` returns it, and anonymization resets it.
 
 The new email only takes effect after the link sent to it (`FRONTEND_URL/confirm-email-change?token=...`) is confirmed. The current address gets a notice. `GET /me` shows `pending_email` meanwhile.
 

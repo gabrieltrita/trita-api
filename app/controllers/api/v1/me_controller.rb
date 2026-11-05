@@ -75,7 +75,7 @@ module Api
       end
 
       def profile_params
-        params.permit(:first_name, :last_name, :phone)
+        params.permit(:first_name, :last_name, :phone, :time_zone)
       end
     end
   end

@@ -354,7 +354,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
     patch:
       tags: [Me]
-      summary: Update name and phone (email has its own flow)
+      summary: Update name, phone and time zone (email has its own flow)
       requestBody:
         required: true
         content:
@@ -365,6 +365,7 @@ paths:
                 first_name: { type: string }
                 last_name: { type: string }
                 phone: { type: string }
+                time_zone: { type: string, example: America/Sao_Paulo, description: "IANA time zone name; anything else answers `inclusion`" }
       responses:
         "200": { description: Profile updated }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -929,6 +930,7 @@ components:
         email_confirmed: { type: boolean }
         two_factor_enabled: { type: boolean }
         pending_email: { type: [string, "null"] }
+        time_zone: { type: string, example: America/Sao_Paulo, description: "IANA name. Only in the authenticated user's own profile (GET /me)" }
         password_set: { type: boolean, description: "Only in the authenticated user's own profile (GET /me)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
