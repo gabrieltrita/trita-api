@@ -35,6 +35,41 @@ RSpec.describe "GitHub workflows" do
     expect(jobs["production"]["steps"].map { |step| step["run"] }).to include('git merge-base --is-ancestor "$GITHUB_SHA" origin/main')
   end
 
+  it "sets an environment up only by hand, from main, and only the chosen one" do
+    dispatch = deploy.fetch("on", deploy[true]).fetch("workflow_dispatch")
+
+    expect(dispatch.dig("inputs", "environment")).to include("type" => "choice", "options" => %w[staging production])
+    { "staging" => "staging", "production" => "production" }.each do |job, environment|
+      expect(jobs[job]["if"]).to include("github.event_name == 'push'", "github.ref == 'refs/heads/main'", "inputs.environment == '#{environment}'")
+      expect(jobs[job]["steps"].last["with"]["setup"]).to eq("${{ github.event_name == 'workflow_dispatch' }}")
+    end
+  end
+
+  it "prepares the server and runs kamal setup only when asked, and deploys otherwise" do
+    steps = action.dig("runs", "steps")
+    prepare = steps.find { |step| step["name"] == "Prepare the server" }
+    deploy_step = steps.find { |step| step["name"] == "Deploy" }
+
+    expect(action.dig("inputs", "setup", "default")).to eq("false")
+    expect(prepare["if"]).to eq("inputs.setup == 'true'")
+    expect(prepare.dig("env", "PREPARE_SCRIPT")).to end_with("/prepare-server.sh")
+    expect(steps.index(prepare)).to be < steps.index(deploy_step)
+    expect(deploy_step["run"]).to include("command=deploy", 'if [ "$SETUP" = "true" ]; then command=setup; fi', 'bin/kamal "$command"')
+  end
+
+  it "builds arm64 images through QEMU only when the server is arm64" do
+    qemu = action.dig("runs", "steps").find { |step| step["uses"].to_s.start_with?("docker/setup-qemu-action") }
+
+    expect(qemu["if"]).to eq("env.DEPLOY_ARCH == 'arm64'")
+  end
+
+  it "installs Docker for the deploy user and opens the HTTP ports on the server" do
+    script = Rails.root.join(".github/actions/kamal-deploy/prepare-server.sh").read
+
+    expect(script).to start_with("#!/usr/bin/env bash\nset -euo pipefail\n")
+    expect(script).to include("https://get.docker.com", 'usermod -aG docker "$(id -un)"', "for port in 80 443", "netfilter-persistent save")
+  end
+
   it "does not deploy where no server is configured" do
     expect(jobs["staging"]["if"]).to include("vars.STAGING_DEPLOY_HOST != ''")
     expect(jobs["production"]["if"]).to include("vars.DEPLOY_HOST != ''")
