@@ -10,6 +10,9 @@ class User < ApplicationRecord
 
   PERSONAL_DATA = %i[notes identities].freeze
 
+  DEFAULT_TIME_ZONE = "America/Sao_Paulo"
+  TIME_ZONES = TZInfo::Timezone.all_identifiers.to_set.freeze
+
   has_secure_password reset_token: false, validations: false
 
   has_many :refresh_tokens, dependent: :delete_all
@@ -43,6 +46,7 @@ class User < ApplicationRecord
   validates :first_name, presence: true, length: { maximum: 100 }
   validates :last_name, length: { maximum: 100 }
   validates :phone, length: { maximum: 20 }
+  validates :time_zone, inclusion: { in: TIME_ZONES }
   validates :password, length: { minimum: 8, maximum: 72 }, format: { with: PASSWORD_FORMAT, message: :weak_password }, if: -> { password.present? }
 
   validates :password, confirmation: true, allow_blank: true
@@ -155,6 +159,7 @@ class User < ApplicationRecord
         first_name: "Deleted",
         last_name: "user",
         phone: nil,
+        time_zone: DEFAULT_TIME_ZONE,
         unconfirmed_email: nil,
         otp_secret: nil,
         otp_enabled_at: nil,

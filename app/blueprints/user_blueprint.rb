@@ -8,6 +8,7 @@ class UserBlueprint < Blueprinter::Base
 
   view :self do
     field :unconfirmed_email, name: :pending_email
+    field :time_zone
     field(:password_set) { |user, _| user.password_set? }
   end
 

@@ -57,6 +57,21 @@ RSpec.describe "Me", type: :request do
       expect(user.reload.first_name).to eq("Put")
     end
 
+    it "updates the time zone with an IANA name" do
+      expect(user.time_zone).to eq("America/Sao_Paulo")
+      patch "/api/v1/me", params: { time_zone: "Europe/Lisbon" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:ok)
+      expect(json.dig("data", "time_zone")).to eq("Europe/Lisbon")
+      expect(user.reload.time_zone).to eq("Europe/Lisbon")
+    end
+
+    it "rejects a time zone that is not an IANA name" do
+      patch "/api/v1/me", params: { time_zone: "Brasilia" }, headers: auth_headers(user), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json.dig("error", "details", "time_zone", 0, "code")).to eq("inclusion")
+      expect(user.reload.time_zone).to eq("America/Sao_Paulo")
+    end
+
     it "returns per-field errors for an invalid profile" do
       patch "/api/v1/me", params: { first_name: "" }, headers: auth_headers(user), as: :json
       expect(response).to have_http_status(:unprocessable_content)

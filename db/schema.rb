@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_04_002000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_05_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -105,6 +105,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_04_002000) do
     t.string "otp_backup_code_digests", default: [], null: false, array: true
     t.datetime "anonymized_at"
     t.datetime "deactivated_at"
+    t.string "time_zone", default: "America/Sao_Paulo", null: false
     t.index ["anonymized_at"], name: "index_users_on_anonymized_at"
     t.index ["confirmed_at"], name: "index_users_on_confirmed_at"
     t.index ["email"], name: "index_users_on_email", unique: true
