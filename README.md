@@ -182,13 +182,15 @@ Kamal does not warn about a secret that was not exported: it reaches the contain
 
 `.github/workflows/deploy.yml` runs the CI and then deploys: a push to `main` goes to **staging**, and a version tag (`0.3.0`, no `v`) goes to **production**, only if the tagged commit is on `main`. Production has no other gate, so creating the tag is the approval. A job is skipped when its server is not configured (`DEPLOY_HOST` for production, `STAGING_DEPLOY_HOST` for staging). Images are pushed to `ghcr.io` with the workflow token, so no registry token is stored; if the package was first created with a personal token, give this repository access to it in the package settings.
 
-The first `bin/kamal setup` of each environment is manual (from your machine, as a user that can install Docker); the workflow only runs `bin/kamal deploy`.
+The first setup of each environment also runs from GitHub: Actions, Deploy, Run workflow on `main`, choosing `staging` or `production`. That run connects with the same deploy key, prepares the server with `.github/actions/kamal-deploy/prepare-server.sh` (installs Docker when it is missing, adds the deploy user to the `docker` group and opens ports 80 and 443 in iptables, saving the rules when `netfilter-persistent` is there, as on Oracle Cloud images) and then runs `bin/kamal setup` instead of `bin/kamal deploy`. It is safe to run again. Pushes and tags keep running `bin/kamal deploy`. When `DEPLOY_ARCH` is `arm64` (Ampere, Graviton), the action sets up QEMU so the amd64 runner can build the image; the first build takes a while, later ones reuse the cache. `bin/kamal setup` from your machine still works the same way.
 
 Repository variables (Settings, Secrets and variables, Actions): `DEPLOY_HOST`, `DEPLOY_SSH_USER`, `APP_HOST`, `CORS_ORIGINS`, `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS` and the optional `DEPLOY_ARCH`, `SMTP_PORT`, `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS`. Staging uses the same names with the `STAGING_` prefix.
 
 Repository secrets: the ones listed under "Deploying with Kamal" (production, plain names), the same with the `STAGING_` prefix for staging, and for each environment `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_SSH_KNOWN_HOSTS` (`STAGING_DEPLOY_SSH_PRIVATE_KEY`, `STAGING_DEPLOY_SSH_KNOWN_HOSTS`).
 
-Deploy user on the server (once per server):
+`bin/deploy-secrets staging|production HOST [--repo OWNER/NAME]` fills the repository secrets that need no outside account, through the GitHub CLI (`gh auth login` first), and never prints a value: `SECRET_KEY_BASE`, `JWT_SECRET`, the three `AR_ENCRYPTION_*` keys, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `DATABASE_URL`, `REDIS_URL` and `SIDEKIQ_REDIS_URL` built with those passwords, `SIDEKIQ_WEB_USERNAME` (`sidekiq`) and `SIDEKIQ_WEB_PASSWORD`, plus a new ed25519 deploy key (`DEPLOY_SSH_PRIVATE_KEY`) and the server's host key (`DEPLOY_SSH_KNOWN_HOSTS`, from `ssh-keyscan`), all with the `STAGING_` prefix for staging. It prints the public key to append to `~/.ssh/authorized_keys` of the deploy user, the host key fingerprint to compare with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server, and the secrets left to you (`SMTP_USERNAME`, `SMTP_PASSWORD`, and the optional `SENTRY_DSN` and `APPLE_*`). It refuses to replace secrets that already exist unless you pass `--force`, because new encryption keys make an existing database unreadable. It needs only Ruby, OpenSSH and `gh`, so it runs in a GitHub Codespace when you are away from your machine.
+
+Deploy user on the server (once per server), if you do not use the image's default sudo user (`ubuntu` on Oracle Cloud and AWS, which the setup run adds to the `docker` group itself):
 
 ```bash
 adduser --disabled-password --gecos "" deploy
@@ -196,7 +198,7 @@ usermod -aG docker deploy
 install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
 ```
 
-On your machine: `ssh-keygen -t ed25519 -N "" -C ci-deploy -f deploy_key`, append `deploy_key.pub` to `/home/deploy/.ssh/authorized_keys`, run `ssh-keyscan -t ed25519 <host> > known_hosts` and check its fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server, then `gh secret set DEPLOY_SSH_PRIVATE_KEY < deploy_key` and `gh secret set DEPLOY_SSH_KNOWN_HOSTS < known_hosts` (and delete the local files). Set `DEPLOY_SSH_USER` to `deploy`. Members of the `docker` group are root-equivalent on that server, so use a key that is only for this.
+By hand instead of `bin/deploy-secrets`: `ssh-keygen -t ed25519 -N "" -C ci-deploy -f deploy_key`, append `deploy_key.pub` to `/home/deploy/.ssh/authorized_keys`, run `ssh-keyscan -t ed25519 <host> > known_hosts` and check its fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server, then `gh secret set DEPLOY_SSH_PRIVATE_KEY < deploy_key` and `gh secret set DEPLOY_SSH_KNOWN_HOSTS < known_hosts` (and delete the local files). Set `DEPLOY_SSH_USER` to `deploy`. Members of the `docker` group are root-equivalent on that server, so use a key that is only for this.
 
 Releasing: promote `dev` with a `release/YYYY-MM-DD` branch and a PR to `main`; the merge deploys staging; when staging looks right, `git tag 0.3.0 origin/main && git push origin 0.3.0` deploys production. Database backups arrive with phase 4.4.
 

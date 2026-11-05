@@ -42,10 +42,11 @@ lib/env_validator.rb       production boot validation (EnvValidator)
 config/deploy.yml          Kamal deploy (web, job, Postgres and Redis accessories); name from config/app.yml, server details from the environment
 .kamal/secrets             references to environment variables for Kamal, never values
 config/deploy.staging.yml  staging destination (bin/kamal ... -d staging); .kamal/secrets.staging reads the same secrets from STAGING_ variables
-.github/workflows/deploy.yml   CD: staging from main, production from a version tag on main; .github/actions/kamal-deploy builds, deploys and checks /health
+.github/workflows/deploy.yml   CD: staging from main, production from a version tag on main, and a manual run on main that prepares the server and runs kamal setup; .github/actions/kamal-deploy builds (QEMU for arm64), deploys and checks /health
 lib/json_log_formatter.rb  one JSON object per log line (JsonLogFormatter), used when config.x.json_logs is on
 lib/sentry_config.rb       Sentry privacy policy (SentryConfig.apply / .scrub)
 lib/app_renamer.rb         AppRenamer, used by bin/rename to rename a fork
+lib/deploy_secrets.rb      DeploySecrets, used by bin/deploy-secrets to fill an environment's generated repository secrets and deploy key through gh
 lib/generators/api_resource/  `bin/rails g api_resource Name field:type`: user-owned resource in the notes shape (templates in templates/*.tt)
 config/app.yml             app identity (name, slug, domain), read through Rails.configuration.x.app
 config/routes/app.rb       the app's routes, drawn inside /api/v1 by `draw :app`; the base never edits it

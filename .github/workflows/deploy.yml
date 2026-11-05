@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main ]
     tags: [ "[0-9]+.[0-9]+.[0-9]+" ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to prepare and set up with bin/kamal setup
+        type: choice
+        options: [ staging, production ]
 
 permissions:
   contents: read
@@ -13,7 +19,10 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   staging:
-    if: github.ref_type == 'branch' && vars.STAGING_DEPLOY_HOST != ''
+    if: >-
+      vars.STAGING_DEPLOY_HOST != '' &&
+      ((github.event_name == 'push' && github.ref_type == 'branch') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.environment == 'staging'))
     needs: ci
     runs-on: ubuntu-latest
     permissions:
@@ -61,12 +70,16 @@ jobs:
       - uses: ./.github/actions/kamal-deploy
         with:
           destination: staging
+          setup: ${{ github.event_name == 'workflow_dispatch' }}
           ssh-private-key: ${{ secrets.STAGING_DEPLOY_SSH_PRIVATE_KEY }}
           ssh-known-hosts: ${{ secrets.STAGING_DEPLOY_SSH_KNOWN_HOSTS }}
           health-url: https://${{ vars.STAGING_APP_HOST }}/health
 
   production:
-    if: github.ref_type == 'tag' && vars.DEPLOY_HOST != ''
+    if: >-
+      vars.DEPLOY_HOST != '' &&
+      ((github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.environment == 'production'))
     needs: ci
     runs-on: ubuntu-latest
     permissions:
@@ -115,6 +128,7 @@ jobs:
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - uses: ./.github/actions/kamal-deploy
         with:
+          setup: ${{ github.event_name == 'workflow_dispatch' }}
           ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           ssh-known-hosts: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
           health-url: https://${{ vars.APP_HOST }}/health

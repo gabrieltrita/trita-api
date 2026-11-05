@@ -1,11 +1,15 @@
 name: Kamal deploy
-description: Builds the image, pushes it and deploys it with Kamal, then checks /health
+description: Builds the image, pushes it and deploys it with Kamal (or prepares the server and runs kamal setup), then checks /health
 
 inputs:
   destination:
     description: Kamal destination; leave empty for production
     required: false
     default: ""
+  setup:
+    description: Prepare the server (Docker, firewall) and run kamal setup instead of kamal deploy
+    required: false
+    default: "false"
   ssh-private-key:
     description: Private key of the deploy user
     required: true
@@ -24,6 +28,12 @@ runs:
       with:
         bundler-cache: true
 
+    - name: Set up QEMU for arm64 images
+      if: env.DEPLOY_ARCH == 'arm64'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
     - name: Set up Buildx
       uses: docker/setup-buildx-action@v4
 
@@ -39,11 +49,22 @@ runs:
         printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
         printf 'Host *\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n' > ~/.ssh/config
 
+    - name: Prepare the server
+      if: inputs.setup == 'true'
+      shell: bash
+      env:
+        PREPARE_SCRIPT: ${{ github.action_path }}/prepare-server.sh
+      run: ssh "$DEPLOY_SSH_USER@$DEPLOY_HOST" 'bash -s' < "$PREPARE_SCRIPT"
+
     - name: Deploy
       shell: bash
       env:
         DESTINATION: ${{ inputs.destination }}
-      run: bin/kamal deploy ${DESTINATION:+-d "$DESTINATION"}
+        SETUP: ${{ inputs.setup }}
+      run: |
+        command=deploy
+        if [ "$SETUP" = "true" ]; then command=setup; fi
+        bin/kamal "$command" ${DESTINATION:+-d "$DESTINATION"}
 
     - name: Check health
       shell: bash
