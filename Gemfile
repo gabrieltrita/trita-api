@@ -51,6 +51,6 @@ end
 group :test do
   gem "shoulda-matchers", "~> 8.0"
   gem "simplecov", require: false
-  gem "openapi_first", "~> 4.2", require: false
+  gem "openapi_first", "~> 4.3", require: false
   gem "webmock", "~> 3.34", require: false
 end
