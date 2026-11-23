@@ -3,3 +3,9 @@ maintenance_cleanup:
   class: "MaintenanceCleanupJob"
   queue: default
   description: "Remove refresh tokens expirados e cadastros não confirmados"
+
+payment_reconciliation:
+  cron: "15 * * * *"
+  class: "PaymentReconciliationJob"
+  queue: default
+  description: "Syncs pending payments that have not changed recently"

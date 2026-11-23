@@ -10,7 +10,7 @@ class DeploySecrets
   HOST_FORMAT = /\A[a-z0-9.-]+\z/i
   IDENTITY_FILE = "config/app.yml".freeze
   SIDEKIQ_WEB_USERNAME = "sidekiq".freeze
-  PROVIDED_BY_YOU = %w[SMTP_USERNAME SMTP_PASSWORD SENTRY_DSN APPLE_TEAM_ID APPLE_KEY_ID APPLE_PRIVATE_KEY].freeze
+  PROVIDED_BY_YOU = %w[SMTP_USERNAME SMTP_PASSWORD SENTRY_DSN APPLE_TEAM_ID APPLE_KEY_ID APPLE_PRIVATE_KEY MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET].freeze
 
   Result = Struct.new(:names, :public_key, :host_fingerprint, keyword_init: true)
 

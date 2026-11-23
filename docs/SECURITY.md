@@ -29,6 +29,7 @@ How trita-api protects accounts and personal data, and the procedures to operate
 - **Deactivation**: an admin can suspend an account (`POST /admin/users/:id/deactivate`). Every session is revoked, and every way of obtaining tokens (password, refresh, social login, confirmation link, 2FA step) answers like a wrong password, so a deactivated email cannot be told apart from a wrong password. A password reset does not reactivate it; only an admin does.
 - **Google and Apple login** trust only a signed ID token: RS256 signature checked against the provider's published keys (cached; refreshed at most once a minute when an unknown key id shows up), `iss` in the provider's issuer values, `aud` in `GOOGLE_CLIENT_IDS` or `APPLE_CLIENT_IDS`, `exp`, and `email_verified`. Anything else is rejected with the same `oauth_token_invalid`. An unconfirmed local account with the same email is treated as a possible pre-registration: linking discards its password and sessions before confirming it. Linking to a confirmed account is allowed only because the provider asserts ownership of that email. A name sent by the client is only a fallback when the provider token has no name.
 - **Apple token revocation** on account deletion signs a short-lived (5 minutes) ES256 client secret with the Sign in with Apple key (`APPLE_PRIVATE_KEY`, a production secret that never goes into the repository; rotate it from the Apple Developer keys page). It is best effort: a failure never blocks the deletion and is only recorded in the audit log as `apple_token_revoked: false`.
+- **Payments** (Mercado Pago): card data is tokenized by the provider's SDK in the browser or app, so the card number and CVV never reach the API (PCI DSS SAQ-A scope); only the brand and last four digits are stored. The payer's CPF is forwarded to the provider and never stored; `card_token` and `payer_document` are filtered from logs. Amounts are set by the server, never by the client. Webhooks must carry a valid `x-signature` (HMAC-SHA256 with `MERCADO_PAGO_WEBHOOK_SECRET`, compared in constant time) and only trigger a fetch of the payment from the provider, so a forged or replayed notification cannot change a status. Create and refund calls carry an idempotency key. `MERCADO_PAGO_ACCESS_TOKEN` is a production secret; rotate it in the Mercado Pago panel if it leaks.
 
 ## Encrypted data
 
@@ -91,6 +92,7 @@ Change the value, restart the services that use it, and rotate any copy in CI or
 - [ ] TLS terminates in front of the app (`force_ssl` is on)
 - [ ] Database and Redis are not publicly reachable and require passwords
 - [ ] `SENTRY_DSN` set (no personal data is sent)
+- [ ] Payments: production (not test) Mercado Pago credentials, and the webhook configured in the Mercado Pago panel with its secret in `MERCADO_PAGO_WEBHOOK_SECRET`
 - [ ] `/docs` disabled (default in production) unless `ENABLE_API_DOCS=true`
 - [ ] Encryption keys backed up in a secret manager
 - [ ] `SECRET_KEY_BASE` set (64+) and never rotated without warning users: it invalidates the 2FA backup codes

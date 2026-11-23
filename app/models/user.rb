@@ -19,6 +19,7 @@ class User < ApplicationRecord
   has_many :consents, dependent: :delete_all
   has_many :notes, dependent: :destroy
   has_many :identities, dependent: :destroy
+  has_many :payments, dependent: :restrict_with_exception
 
   encrypts :email, deterministic: true, downcase: true
   encrypts :first_name, :last_name, :phone, :unconfirmed_email, :otp_secret
