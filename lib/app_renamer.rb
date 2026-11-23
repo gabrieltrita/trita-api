@@ -8,7 +8,7 @@ class AppRenamer
   IDENTITY_FILE = "config/app.yml".freeze
   APPLICATION_FILE = "config/application.rb".freeze
   COMPOSE_FILE = "docker-compose.yml".freeze
-  DOCUMENTS = %w[README.md docs/SECURITY.md docs/openapi.yaml .claude/CLAUDE.md].freeze
+  DOCUMENTS = %w[README.md docs/README.pt-BR.md docs/SECURITY.md docs/openapi.yaml .claude/CLAUDE.md].freeze
 
   MANUAL_STEPS = [
     "Generate new secrets in .env: JWT_SECRET (bin/rails secret), AR_ENCRYPTION_* (bin/rails db:encryption:init), REDIS_PASSWORD, DATABASE_PASSWORD, SIDEKIQ_WEB_PASSWORD",
