@@ -11,6 +11,8 @@ module ErrorHandling
     rescue_from Auth::Unauthorized, with: :handle_unauthorized
     rescue_from Auth::ReauthenticationFailed, with: :handle_reauthentication_failed
     rescue_from Auth::ProviderUnavailable, with: :handle_provider_unavailable
+    rescue_from Payments::GatewayUnavailable, with: :handle_payments_unavailable
+    rescue_from Payments::GatewayRejected, with: :handle_payment_request_invalid
   end
 
   private
@@ -66,6 +68,14 @@ module ErrorHandling
 
   def handle_provider_unavailable(error)
     render_error(status: :service_unavailable, code: "oauth_provider_unavailable", message: error.message)
+  end
+
+  def handle_payments_unavailable(error)
+    render_error(status: :service_unavailable, code: "payments_unavailable", message: error.message)
+  end
+
+  def handle_payment_request_invalid(error)
+    render_error(status: :unprocessable_content, code: "payment_request_invalid", message: error.message)
   end
 
   def handle_internal_error(error)

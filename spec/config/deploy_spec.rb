@@ -2,7 +2,7 @@ require "rails_helper"
 require "kamal"
 
 RSpec.describe "Kamal deploy configuration" do
-  OPTIONAL_SECRETS = %w[SENTRY_DSN APPLE_TEAM_ID APPLE_KEY_ID APPLE_PRIVATE_KEY].freeze
+  OPTIONAL_SECRETS = %w[SENTRY_DSN APPLE_TEAM_ID APPLE_KEY_ID APPLE_PRIVATE_KEY MERCADO_PAGO_ACCESS_TOKEN MERCADO_PAGO_WEBHOOK_SECRET].freeze
 
   let(:app) { YAML.load_file(Rails.root.join("config/app.yml")).fetch("shared") }
   let(:raw) { Rails.root.join("config/deploy.yml").read }

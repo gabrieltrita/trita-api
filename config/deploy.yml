@@ -60,6 +60,8 @@ env:
     - APPLE_TEAM_ID
     - APPLE_KEY_ID
     - APPLE_PRIVATE_KEY
+    - MERCADO_PAGO_ACCESS_TOKEN
+    - MERCADO_PAGO_WEBHOOK_SECRET
 
 accessories:
   db:

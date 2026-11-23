@@ -127,7 +127,7 @@ Starting a new app from this base: follow [docs/FORKING.md](docs/FORKING.md) (re
 
 `Dockerfile` (multi-stage, non-root) is for production; `Dockerfile.dev` is used by docker-compose.
 
-The app refuses to boot in production unless these are set and strong enough: `DATABASE_URL`, `REDIS_URL`, `SIDEKIQ_REDIS_URL`, `SECRET_KEY_BASE` (64+, `bin/rails secret`), `JWT_SECRET` (64+), `AR_ENCRYPTION_*` (32+), `APP_HOSTS`, `CORS_ORIGINS` (https only), `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS`, `SIDEKIQ_WEB_USERNAME`, `SIDEKIQ_WEB_PASSWORD` (16+). Optional: `SENTRY_DSN`, `JWT_SECRET_PREVIOUS`, `ENABLE_API_DOCS`, `TERMS_VERSION`, `PRIVACY_VERSION`, `GOOGLE_CLIENT_IDS` (comma-separated Google OAuth client ids: web, iOS, Android; empty disables Google login), `APPLE_CLIENT_IDS` (comma-separated Apple identifiers: the app's bundle id and the web Services ID; empty disables Apple login), `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the Sign in with Apple key: team id, key id and the contents of the `.p8` file with `\n` instead of line breaks; all three or none, used to revoke the Apple token when an account is deleted).
+The app refuses to boot in production unless these are set and strong enough: `DATABASE_URL`, `REDIS_URL`, `SIDEKIQ_REDIS_URL`, `SECRET_KEY_BASE` (64+, `bin/rails secret`), `JWT_SECRET` (64+), `AR_ENCRYPTION_*` (32+), `APP_HOSTS`, `CORS_ORIGINS` (https only), `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS`, `SIDEKIQ_WEB_USERNAME`, `SIDEKIQ_WEB_PASSWORD` (16+). Optional: `SENTRY_DSN`, `JWT_SECRET_PREVIOUS`, `ENABLE_API_DOCS`, `TERMS_VERSION`, `PRIVACY_VERSION`, `GOOGLE_CLIENT_IDS` (comma-separated Google OAuth client ids: web, iOS, Android; empty disables Google login), `APPLE_CLIENT_IDS` (comma-separated Apple identifiers: the app's bundle id and the web Services ID; empty disables Apple login), `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the Sign in with Apple key: team id, key id and the contents of the `.p8` file with `\n` instead of line breaks; all three or none, used to revoke the Apple token when an account is deleted), `MERCADO_PAGO_ACCESS_TOKEN` (empty disables payments) and `MERCADO_PAGO_WEBHOOK_SECRET` (empty rejects every webhook; see Payments).
 
 Logs go to stdout as one JSON object per line. Each request is a single line (lograge) with `time`, `level`, `method`, `path`, `controller`, `action`, `status`, `duration`, `db`, `view`, `request_id`, `user_id` and, on errors, the exception class:
 
@@ -156,7 +156,7 @@ Two health endpoints, both public and outside `/api/v1`:
 
 Before the first deploy: an Ubuntu server reachable by SSH key with ports 80 and 443 open, a DNS A record for the API host, and a GitHub token with `write:packages` (images go to `ghcr.io`).
 
-Variables to export (shell or password manager; `.kamal/secrets` only holds references to them, never write a value in it): `DEPLOY_HOST`, `DEPLOY_SSH_USER` (default `root`), `DEPLOY_ARCH` (default `amd64`), `APP_HOST`, `KAMAL_REGISTRY_USERNAME`, `KAMAL_REGISTRY_PASSWORD`, `CORS_ORIGINS`, `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS`, `SMTP_USERNAME`, `SMTP_PASSWORD`, every secret listed in the production section above, `POSTGRES_PASSWORD` and `REDIS_PASSWORD`, plus the optional ones (`SENTRY_DSN`, `GOOGLE_CLIENT_IDS`, `APPLE_*`). The connection strings carry the passwords, so you build them:
+Variables to export (shell or password manager; `.kamal/secrets` only holds references to them, never write a value in it): `DEPLOY_HOST`, `DEPLOY_SSH_USER` (default `root`), `DEPLOY_ARCH` (default `amd64`), `APP_HOST`, `KAMAL_REGISTRY_USERNAME`, `KAMAL_REGISTRY_PASSWORD`, `CORS_ORIGINS`, `FRONTEND_URL`, `MAILER_FROM`, `SMTP_ADDRESS`, `SMTP_USERNAME`, `SMTP_PASSWORD`, every secret listed in the production section above, `POSTGRES_PASSWORD` and `REDIS_PASSWORD`, plus the optional ones (`SENTRY_DSN`, `GOOGLE_CLIENT_IDS`, `APPLE_*`, `MERCADO_PAGO_*`). The connection strings carry the passwords, so you build them:
 
 - `DATABASE_URL`: `postgres://postgres:<POSTGRES_PASSWORD>@<slug>-api-db:5432/<slug>_api_production`
 - `REDIS_URL`: `redis://:<REDIS_PASSWORD>@<slug>-api-redis:6379/1`
@@ -467,3 +467,33 @@ Same flow, rules and errors as Google, with the Apple identity token. Difference
   ```
 
   Revocation is best effort and never blocks the deletion: the audit entry `user.anonymized` records `apple_token_revoked` as `true` or `false` (it is absent when the user has no Apple identity or sent no code). Deletions made by an admin cannot revoke anything.
+
+### 20. Payments (Pix and credit card with Mercado Pago)
+
+Payments are off until `MERCADO_PAGO_ACCESS_TOKEN` is set; meanwhile the payment endpoints answer `503 payments_unavailable` and nothing leaves the server.
+
+The amount is always decided by the server. Domain code (an order, an invoice) or an admin creates the payment, and the user only chooses how to pay:
+
+```ruby
+Payment.create!(user: user, payable: order, amount_cents: 15_000, description: "Order #42")
+```
+
+```http
+POST /admin/payments { "user_id": "...", "amount_cents": 15000, "description": "Backend MVP" }   -> 201
+GET  /payments
+GET  /payments/:id
+POST /payments/:id/pix  { "payer_document": "12345678909" }                                       -> QR code
+POST /payments/:id/card { "card_token": "...", "payment_method_id": "visa", "issuer_id": "25", "installments": 3, "payer_document": "..." }
+POST /admin/payments/:id/refund
+```
+
+- **Pix** returns `pix_qr_code` (copy and paste), `pix_qr_code_base64` (image) and `pix_expires_at` (30 minutes). The status stays `pending` until Mercado Pago confirms it.
+- **Card**: the front end tokenizes the card with the Mercado Pago SDK (Card Payment Brick or `MercadoPago.js`) using the public key; the card number and CVV never reach the API. The answer carries the decision: `approved`, `rejected` (see `status_detail`, for example `cc_rejected_insufficient_amount`) or `pending` (under review). Installments are capped at 12.
+- Statuses: `created`, `pending`, `approved`, `rejected`, `cancelled`, `refunded`, `charged_back`. Only `created` and `rejected` payments can be paid (`409 payment_not_payable` otherwise), and only `approved` ones refunded (`409 payment_not_refundable`). A request the provider refuses, such as an expired card token, answers `422 payment_request_invalid`.
+- **Webhook**: in the Mercado Pago panel (Your integrations, Webhooks) point the "Payments" event to `https://<APP_HOST>/api/v1/webhooks/mercado_pago` and copy the secret it shows into `MERCADO_PAGO_WEBHOOK_SECRET`. Notifications without a valid `x-signature` answer `401 webhook_signature_invalid`. A valid one only enqueues `PaymentSyncJob`, which fetches the payment from Mercado Pago; the body is never trusted.
+- `PaymentReconciliationJob` runs every hour (`config/schedule.yml`) and syncs payments that have been `pending` for 15 minutes, so a lost webhook only delays an update.
+- Every charge and refund call sends an `X-Idempotency-Key`, so a double click never charges twice. Mercado Pago calls time out after 5 seconds and answer `503 payments_unavailable`.
+- Audit events: `payment.created`, `payment.attempted`, `payment.status_changed`, `payment.refunded`.
+- Payments are financial records the law requires you to keep: they are not in `User::PERSONAL_DATA`, survive account anonymization (a user with payments cannot be hard deleted) and appear under `payments` in `GET /me/export`. They store no CPF or email, only the card brand and last four digits.
+- Another gateway means a class with the same four methods as `Payments::Gateways::MercadoPago` (`create_pix`, `create_card`, `fetch`, `refund`) returning `Payments::GatewayResult`, selected in `Payments::Gateway.current`.
+- Test with the test credentials from the Mercado Pago panel and its test cards before going live.

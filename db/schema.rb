@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_23_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -62,6 +62,36 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_000000) do
     t.datetime "updated_at", null: false
     t.index ["user_id", "created_at"], name: "index_notes_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_notes_on_user_id"
+  end
+
+  create_table "payments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.string "payable_type"
+    t.uuid "payable_id"
+    t.integer "amount_cents", null: false
+    t.string "currency", default: "BRL", null: false
+    t.string "description", null: false
+    t.string "status", default: "created", null: false
+    t.string "payment_method"
+    t.string "provider"
+    t.string "provider_payment_id"
+    t.string "status_detail"
+    t.integer "installments"
+    t.string "card_brand"
+    t.string "card_last_four"
+    t.text "pix_qr_code"
+    t.text "pix_qr_code_base64"
+    t.string "pix_ticket_url"
+    t.datetime "pix_expires_at"
+    t.datetime "approved_at"
+    t.datetime "refunded_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["payable_type", "payable_id"], name: "index_payments_on_payable"
+    t.index ["provider", "provider_payment_id"], name: "index_payments_on_provider_and_provider_payment_id", unique: true, where: "(provider_payment_id IS NOT NULL)"
+    t.index ["status", "updated_at"], name: "index_payments_on_status_and_updated_at"
+    t.index ["user_id", "created_at"], name: "index_payments_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_payments_on_user_id"
   end
 
   create_table "refresh_tokens", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -116,5 +146,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_000000) do
   add_foreign_key "consents", "users", on_delete: :cascade
   add_foreign_key "identities", "users"
   add_foreign_key "notes", "users"
+  add_foreign_key "payments", "users"
   add_foreign_key "refresh_tokens", "users", on_delete: :cascade
 end
