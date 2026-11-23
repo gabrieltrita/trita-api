@@ -14,7 +14,7 @@
 
 ## What this is
 
-Base API (Rails 8.1, API-only, Ruby 3.4.12) that every Trita app builds on. The front end is a separate Node project, **trita-web**, which consumes this API. Responsibilities here: authentication, roles, security, privacy (LGPD) and the shared infrastructure for future domain features.
+Base API (Rails 8.1, API-only, Ruby 3.4.13) that every Trita app builds on. The front end is a separate Node project, **trita-web**, which consumes this API. Responsibilities here: authentication, roles, security, privacy (LGPD) and the shared infrastructure for future domain features.
 
 ## Stack
 
