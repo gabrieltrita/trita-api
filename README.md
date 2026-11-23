@@ -1,5 +1,49 @@
 # trita-api
 
+[Leia em português](docs/README.pt-BR.md)
+
+## Why trita-api
+
+Every product needs the same backend before it can do anything useful: accounts, secure login, roles, an admin area, privacy compliance and production plumbing. trita-api is that backend, already built, tested and documented, so a new project starts on day one with its own business rules instead of spending weeks rebuilding authentication.
+
+It is a Rails 8.1 API that a web or mobile front end consumes, and it is meant to be forked: rename it with one command and add the domain on top.
+
+### What comes ready
+
+| Area | Included |
+| --- | --- |
+| Accounts | Sign-up with email confirmation, login, profile and email change, password recovery, account deletion |
+| Security | JWT with rotating refresh tokens, per-device sessions, two-factor authentication (TOTP and backup codes), lockout after failed attempts, rate limiting, encrypted personal data |
+| Social login | Google and Apple, linked identities and passwordless accounts |
+| Roles and admin | Role-based authorization, admin area protected by 2FA, user management, immutable audit log |
+| Privacy (LGPD) | Versioned consents, full personal data export, anonymization on account deletion |
+| Operations | Docker for development and production, background and scheduled jobs, health checks, JSON logs, Sentry, strict production configuration checks |
+| Quality | 100% line and branch test coverage, API contract checked against OpenAPI, Swagger UI, CI with RuboCop, Brakeman and bundler-audit |
+| Speed | A generator that creates a complete user-owned resource (model, policy, controller, routes, specs, docs) in one command |
+
+### Time it saves
+
+Estimated effort to build the same scope from scratch, for one experienced developer:
+
+| Block | Estimated time saved |
+| --- | --- |
+| Authentication, sessions and 2FA | 3 to 4 weeks |
+| Social login and passwordless accounts | 1 to 2 weeks |
+| Roles, admin area and audit log | 1 to 2 weeks |
+| LGPD: consents, export and anonymization | 1 week |
+| Infrastructure, observability and CI | 1 week |
+| **Total** | **7 to 10 weeks** |
+
+These are estimates, not measurements. In practice it means an MVP backend can be delivered in 2 to 4 weeks, focused on what makes the product different.
+
+### Built for
+
+- Startups and founders who need an MVP backend that is ready for production and for an audit.
+- Agencies and front-end or mobile developers who need a reliable API behind their apps.
+- Teams in Brazil that must comply with LGPD from the first release.
+
+The rest of this file is the technical documentation.
+
 Base API (Rails 8.1, API-only) for the Trita apps. The front end lives in the separate **trita-web** project (Node).
 
 ## Stack
