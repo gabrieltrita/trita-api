@@ -48,14 +48,30 @@ Rails.application.routes.draw do
 
       resources :roles, only: :index
 
+      resources :payments, only: %i[index show] do
+        member do
+          post :pix
+          post :card
+        end
+      end
+
+      scope :webhooks, module: :webhooks, as: :webhooks do
+        post "mercado_pago", to: "mercado_pago#create"
+      end
+
       namespace :admin do
         resources :users do
           member do
             post :unlock
+            post :deactivate
+            post :reactivate
             delete :two_factor, action: :reset_two_factor
           end
         end
         resources :audit_logs, only: :index
+        resources :payments, only: %i[index create] do
+          post :refund, on: :member
+        end
       end
 
       draw :app

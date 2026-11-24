@@ -76,6 +76,14 @@ class Rack::Attack
     req.ip if (req.post? || req.patch? || req.delete?) && (REAUTH_PATHS.include?(req.path) || req.path.start_with?("/api/v1/me/two_factor", "/api/v1/me/identities") || (req.delete? && req.path == "/api/v1/me"))
   end
 
+  throttle("payments/attempt/ip", limit: 10, period: 1.minute) do |req|
+    req.ip if req.post? && req.path.match?(%r{\A/api/v1/payments/[^/]+/(pix|card)\z})
+  end
+
+  throttle("webhooks/ip", limit: 120, period: 1.minute) do |req|
+    req.ip if req.post? && req.path.start_with?("/api/v1/webhooks/")
+  end
+
   self.throttled_responder = lambda do |_req|
     body = { error: { code: "rate_limited", message: "Too many requests. Please try again shortly." } }
     [ 429, { "Content-Type" => "application/json", "Retry-After" => "60" }, [ body.to_json ] ]

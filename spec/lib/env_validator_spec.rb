@@ -6,6 +6,7 @@ RSpec.describe EnvValidator do
       "DATABASE_URL" => "postgres://u:p@db/app",
       "REDIS_URL" => "redis://:p@redis:6379/1",
       "SIDEKIQ_REDIS_URL" => "redis://:p@redis:6379/0",
+      "SECRET_KEY_BASE" => "f" * 64,
       "JWT_SECRET" => "a" * 64,
       "AR_ENCRYPTION_PRIMARY_KEY" => "b" * 32,
       "AR_ENCRYPTION_DETERMINISTIC_KEY" => "c" * 32,
@@ -33,6 +34,7 @@ RSpec.describe EnvValidator do
   end
 
   {
+    "SECRET_KEY_BASE" => [ "curto", /SECRET_KEY_BASE must be at least 64/ ],
     "JWT_SECRET" => [ "curto", /JWT_SECRET must be at least 64/ ],
     "AR_ENCRYPTION_PRIMARY_KEY" => [ "#{'x' * 32},curta", /AR_ENCRYPTION_PRIMARY_KEY must be at least 32/ ],
     "SIDEKIQ_WEB_PASSWORD" => [ "123", /SIDEKIQ_WEB_PASSWORD must be at least 16/ ],

@@ -14,7 +14,7 @@
 
 ## What this is
 
-Base API (Rails 8.1, API-only, Ruby 3.3.3) that every Trita app builds on. The front end is a separate Node project, **trita-web**, which consumes this API. Responsibilities here: authentication, roles, security, privacy (LGPD) and the shared infrastructure for future domain features.
+Base API (Rails 8.1, API-only, Ruby 3.4.13) that every Trita app builds on. The front end is a separate Node project, **trita-web**, which consumes this API. Responsibilities here: authentication, roles, security, privacy (LGPD) and the shared infrastructure for future domain features.
 
 ## Stack
 
@@ -33,15 +33,22 @@ app/controllers/api/v1/notes_controller.rb  example domain module (Note, NotePol
 app/controllers/docs_controller.rb   Swagger UI at /docs (non-production or ENABLE_API_DOCS=true)
 app/controllers/health_controller.rb GET /health (readiness, public); checks in app/services/health_check.rb
 app/jobs/                  MaintenanceCleanupJob (daily, config/schedule.yml)
-app/mailers/user_mailer.rb confirmation, registration_attempt, welcome, password_reset, password_changed, email_change_confirmation, email_change_requested, account_locked, two_factor_disabled
+app/mailers/user_mailer.rb confirmation, registration_attempt, welcome, password_reset, password_changed, email_change_confirmation, email_change_requested, account_locked, account_deactivated, account_reactivated, two_factor_disabled
 app/models/                User (+ concerns/two_factor_authenticatable), RefreshToken, AuditLog, Consent, Identity, Current
 app/policies/              ApplicationPolicy, UserPolicy, AuditLogPolicy
 app/services/auth/         JsonWebToken, TokenIssuer, RefreshTokenRotator, TokenDenylist, TwoFactorChallenge, OauthSignin, oauth/JwksVerifier (+ GoogleVerifier, AppleVerifier), oauth/Providers, oauth/AppleRevoker, Unauthorized/InvalidCredentials/InvalidToken/ReauthenticationFailed/ProviderUnavailable
 app/services/user_data_export.rb
+app/services/payments/     Gateway (selects the configured gateway), gateways/MercadoPago, GatewayResult, WebhookSignature, GatewayUnavailable/GatewayRejected
+app/controllers/api/v1/payments_controller.rb, webhooks/mercado_pago_controller.rb, admin/payments_controller.rb  payments (Payment, PaymentPolicy, PaymentBlueprint, PaymentSyncJob, PaymentReconciliationJob)
 lib/env_validator.rb       production boot validation (EnvValidator)
+config/deploy.yml          Kamal deploy (web, job, Postgres and Redis accessories); name from config/app.yml, server details from the environment
+.kamal/secrets             references to environment variables for Kamal, never values
+config/deploy.staging.yml  staging destination (bin/kamal ... -d staging); .kamal/secrets.staging reads the same secrets from STAGING_ variables
+.github/workflows/deploy.yml   CD: staging from main, production from a version tag on main, and a manual run on main that prepares the server and runs kamal setup; .github/actions/kamal-deploy builds (QEMU for arm64), deploys and checks /health
 lib/json_log_formatter.rb  one JSON object per log line (JsonLogFormatter), used when config.x.json_logs is on
 lib/sentry_config.rb       Sentry privacy policy (SentryConfig.apply / .scrub)
 lib/app_renamer.rb         AppRenamer, used by bin/rename to rename a fork
+lib/deploy_secrets.rb      DeploySecrets, used by bin/deploy-secrets to fill an environment's generated repository secrets and deploy key through gh
 lib/generators/api_resource/  `bin/rails g api_resource Name field:type`: user-owned resource in the notes shape (templates in templates/*.tt)
 config/app.yml             app identity (name, slug, domain), read through Rails.configuration.x.app
 config/routes/app.rb       the app's routes, drawn inside /api/v1 by `draw :app`; the base never edits it
@@ -59,6 +66,7 @@ spec/                      models, requests, mailers, policies, services, contro
 - Cookie mode: header `X-Token-Transport: cookie` puts the refresh token in `<slug>_refresh` (httpOnly, SameSite=Strict, path `/api/v1/auth`) and removes it from the JSON. The cookie is only read when the header is present (CSRF defence through CORS preflight).
 - 2FA: TOTP with replay protection and 10 HMAC'd single-use backup codes. Login with 2FA returns a 5-minute single-use `challenge_token` (`type: "2fa_challenge"`). Admins must have 2FA to use `/api/v1/admin/*` and cannot disable it.
 - Lockout: 5 failures lock 15 min, doubling to 24 h; a locked account answers exactly like a wrong password; the owner is emailed; any password change unlocks.
+- Deactivation (admin): `deactivated_at` blocks every way of obtaining tokens (answered like a wrong password, without counting a failed attempt) and revokes every session; only an admin reactivates. New sign-in paths must go through `TokenResponder` (`refuse_deactivated!`) or check `deactivated?` themselves.
 - Email confirmation is required to log in. Sign-up, password reset and confirmation resend always answer the same way whether the email exists or not.
 
 ## Security invariants (do not break)
@@ -76,7 +84,8 @@ spec/                      models, requests, mailers, policies, services, contro
 - Account deletion is anonymization (`User#anonymize!`), never a hard delete, so the audit trail stays consistent.
 - `AuditLog` and `Consent` rows are immutable (`readonly?`). Record sensitive events with `AuditLog.record!(action, target:, actor:, metadata:)`; `metadata` never holds personal data and `action` must be in `AuditLog::ACTIONS`.
 - New sensitive or unauthenticated endpoints get a Rack::Attack throttle in `config/initializers/rack_attack.rb` (the request body is JSON; use `json_param`).
-- Production refuses to boot without strong secrets (`EnvValidator`); add new required variables there and to `.env.example`.
+- Production refuses to boot without strong secrets (`EnvValidator`); a new required variable goes into `EnvValidator::REQUIRED`, `config/deploy.yml`, `.kamal/secrets`, `.kamal/secrets.staging` (as `STAGING_`), `.github/workflows/deploy.yml`, `.env.example` and the README in the same change (`spec/config/deploy_spec.rb` and `spec/config/workflows_spec.rb` fail otherwise). `.kamal/secrets` holds references only; never write a value in it.
+- Payments: the amount is always set on the server; card data only arrives as a provider token; CPF is never stored; webhooks are trusted only after the signature check and only trigger a fetch from the provider. `Payment` rows are financial records: never add them to `User::PERSONAL_DATA` or delete them on anonymization.
 - Content a user creates (notes, orders, messages) is listed in `User::PERSONAL_DATA`: `UserDataExport` exports it under `content` with `<Model>Blueprint`, and `User#anonymize!` destroys it in the same transaction. Its personal columns are encrypted and filtered from logs.
 - Logs never carry personal data: no params, bodies, IPs, user agents, exception messages or job arguments (`JsonLogFormatter` logs only an exception's class; `config.active_job.log_arguments` is off with JSON logs). Identify requests by `request_id` and users by `user_id` (UUID). Log a Hash of safe fields (`Rails.logger.error({ error: e.class.name, ... })`), never an exception message or interpolated values.
 - Sentry events never carry personal data. `lib/sentry_config.rb` is the single policy (used by the initializer and by `with_sentry` in specs): `send_default_pii = false`, no client IP, no `Authorization`/`Cookie`/`X-Token-Transport`/`User-Agent` headers, exception and manual messages replaced by `[FILTERED]`, no SQL text or cache keys in breadcrumbs, no Sidekiq job arguments, user reduced to its id. New personal headers, breadcrumb fields or contexts go there, with a spec.
@@ -143,3 +152,6 @@ docker compose exec api bundle exec rspec
 - The ActiveSupport breadcrumbs logger is injected by sentry-rails only at boot; specs inject and detach it inside `with_sentry`.
 - `has_secure_password` runs with `validations: false`, so `User` re-declares the password confirmation and the "password or identity" validation; keep both when editing it.
 - Specs never reach the network (`webmock/rspec`); stub every external HTTP call, such as Google's JWKS.
+- Changing `SECRET_KEY_BASE` invalidates every user's 2FA backup codes (their HMAC key derives from it).
+- Kamal's secrets reader only expands `$VAR` and `${VAR}`: `${VAR:-default}` leaves `:-}` in the value, and an unset variable becomes an empty string with no warning. `EnvValidator` is the safety net at boot, so optional secrets are plain `$VAR` references. `.kamal/secrets.staging` mirrors `.kamal/secrets` with `STAGING_` sources (`spec/config/deploy_spec.rb` checks the expanded values).
+- Workflows pass secrets to scripts as `env:` data, never as `${{ }}` inside `run:`, and only use `actions/*`, `docker/*`, `ruby/*` and local actions (`spec/config/workflows_spec.rb`). The CI is reusable (`workflow_call`) and the deploy workflow calls it; `main` is not in the CI's own push trigger for that reason.

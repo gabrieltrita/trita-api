@@ -4,10 +4,11 @@ class AuditLog < ApplicationRecord
     auth.two_factor_failed auth.refresh_reuse_detected
     user.registered user.confirmed user.created user.updated user.anonymized
     user.role_changed user.password_changed user.password_reset_requested user.password_reset
-    user.email_change_requested user.email_changed user.unlocked
+    user.email_change_requested user.email_changed user.unlocked user.deactivated user.reactivated
     user.data_exported user.consent_changed
     two_factor.enabled two_factor.disabled two_factor.reset two_factor.backup_codes_regenerated
     session.revoked identity.linked identity.unlinked
+    payment.created payment.attempted payment.status_changed payment.refunded
   ].freeze
 
   belongs_to :actor, class_name: "User", optional: true

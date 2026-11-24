@@ -20,13 +20,13 @@ info:
     |---|---|---|
     | `validation_failed` | 422 | Invalid payload, see `details` |
     | `bad_request` | 400 | Missing parameter or malformed JSON |
-    | `missing_token` | 401 | No `Authorization` header |
+    | `missing_token` | 401 | No `Authorization` header, or no refresh cookie on `POST /auth/refresh` in cookie mode |
     | `invalid_token` | 401 | Invalid, expired or wrong-type token |
     | `token_revoked` | 401 | Access token revoked by logout |
     | `session_revoked` | 401 | Session ended (device removed, all sessions revoked) |
     | `session_expired` | 401 | Token issued before a password change |
     | `refresh_token_reused` | 401 | Rotated refresh token reused; every session revoked |
-    | `invalid_credentials` | 401 | Wrong email or password, or locked account |
+    | `invalid_credentials` | 401 | Wrong email or password, or locked or deactivated account |
     | `invalid_two_factor_code` | 401/422 | Wrong TOTP or backup code |
     | `two_factor_challenge_expired` | 401 | Login 2FA challenge already used or expired |
     | `invalid_confirmation_token` | 401 | Bad or expired email confirmation link |
@@ -48,9 +48,14 @@ info:
     | `two_factor_already_enabled` | 422 | 2FA is already enabled |
     | `two_factor_not_enabled` | 422 | 2FA is not enabled |
     | `consent_required` | 422 | Required consent cannot be revoked |
+    | `payment_not_payable` | 409 | The payment is not `created` or `rejected`, so it cannot be paid now |
+    | `payment_not_refundable` | 409 | Only approved payments can be refunded |
+    | `webhook_signature_invalid` | 401 | Webhook without a valid `x-signature` |
+    | `payment_request_invalid` | 422 | The payment provider refused the request (for example an invalid or expired card token) |
     | `rate_limited` | 429 | Too many requests, see `Retry-After` |
     | `internal_error` | 500 | Unexpected error |
     | `oauth_provider_unavailable` | 503 | The provider's signing keys could not be fetched |
+    | `payments_unavailable` | 503 | Payments are not configured or the payment provider could not be reached |
 
     Validation `details` codes include Rails defaults (`blank`, `invalid`, `too_short`, `too_long`, `confirmation`, `inclusion`)
     plus `weak_password`, `required` and `same_as_current`.
@@ -60,6 +65,8 @@ tags:
   - name: Auth
   - name: Me
   - name: Admin
+  - name: Payments
+  - name: Webhooks
   - name: Notes
     description: Example domain module (private notes per user). Remove it when starting a new app; see docs/FORKING.md.
 paths:
@@ -147,7 +154,10 @@ paths:
     post:
       tags: [Auth]
       summary: Exchange the refresh token for a new pair (rotation)
-      description: Reusing an already rotated refresh token revokes every session of the user.
+      description: >-
+        Reusing an already rotated refresh token revokes every session of the user.
+        Without a refresh token the answer is 400 `bad_request` in body mode and 401 `missing_token` in cookie mode,
+        where a missing cookie means there is no session.
       security: []
       parameters:
         - $ref: "#/components/parameters/TokenTransport"
@@ -351,7 +361,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
     patch:
       tags: [Me]
-      summary: Update name and phone (email has its own flow)
+      summary: Update name, phone and time zone (email has its own flow)
       requestBody:
         required: true
         content:
@@ -362,6 +372,7 @@ paths:
                 first_name: { type: string }
                 last_name: { type: string }
                 phone: { type: string }
+                time_zone: { type: string, example: America/Sao_Paulo, description: "IANA time zone name; anything else answers `inclusion`" }
       responses:
         "200": { description: Profile updated }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -443,6 +454,7 @@ paths:
                   consents: { type: array, items: { type: object } }
                   sessions: { type: array, items: { type: object } }
                   activity: { type: array, items: { type: object } }
+                  payments: { type: array, items: { $ref: "#/components/schemas/Payment" } }
                   content:
                     type: object
                     description: Personal content listed in User::PERSONAL_DATA, one key per association
@@ -689,6 +701,7 @@ paths:
         - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
         - { name: role, in: query, schema: { type: string, enum: [user, admin] } }
         - { name: email, in: query, description: Exact match, schema: { type: string } }
+        - { name: status, in: query, description: Active or deactivated accounts; omitted lists both, schema: { type: string, enum: [active, deactivated] } }
       responses:
         "200":
           description: Page of users
@@ -754,6 +767,28 @@ paths:
         - $ref: "#/components/parameters/Id"
       responses:
         "200": { description: Unlocked }
+  /admin/users/{id}/deactivate:
+    post:
+      tags: [Admin]
+      summary: Deactivate the account
+      description: |
+        Revokes every session and blocks login, refresh and social login (answered as `invalid_credentials`) until the
+        account is reactivated. Data is kept. Audited as `user.deactivated` and the owner is emailed. Admins cannot
+        deactivate themselves; an account already deactivated is returned unchanged.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUser" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/users/{id}/reactivate:
+    post:
+      tags: [Admin]
+      summary: Reactivate the account
+      description: Audited as `user.reactivated` and the owner is emailed; an active account is returned unchanged.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { $ref: "#/components/responses/AdminUser" }
   /admin/users/{id}/two_factor:
     delete:
       tags: [Admin]
@@ -788,6 +823,170 @@ paths:
                     items: { $ref: "#/components/schemas/AuditLog" }
                   meta: { $ref: "#/components/schemas/Pagination" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /payments:
+    get:
+      tags: [Payments]
+      summary: List the current user's payments, newest first
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
+      responses:
+        "200":
+          description: Page of payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Payment" }
+                  meta: { $ref: "#/components/schemas/Pagination" }
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Show a payment, with the Pix QR code while it is pending
+      description: Another user's payment answers 404, not 403, so ids cannot be probed.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { $ref: "#/components/responses/Payment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /payments/{id}/pix:
+    post:
+      tags: [Payments]
+      summary: Pay with Pix
+      description: |
+        Creates a Pix charge at the payment provider and returns the QR code (`pix_qr_code` is the copy-and-paste
+        code, `pix_qr_code_base64` the image) and `pix_expires_at` (30 minutes). The status becomes `pending` until the
+        provider confirms it through the webhook. Only `created` or `rejected` payments can be paid. Audited as
+        `payment.attempted`.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payer_document: { type: string, description: "Payer CPF (digits); sent to the provider, never stored" }
+      responses:
+        "200": { $ref: "#/components/responses/Payment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/PaymentRequestInvalid" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /payments/{id}/card:
+    post:
+      tags: [Payments]
+      summary: Pay with a credit card tokenized by the provider's SDK
+      description: |
+        The front end tokenizes the card with the Mercado Pago SDK; the card number and CVV never reach this API.
+        The answer carries the provider's decision: `approved`, `rejected` (see `status_detail`) or `pending` (under
+        review). A rejected payment can be tried again. Only `created` or `rejected` payments can be paid.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [card_token, payment_method_id]
+              properties:
+                card_token: { type: string, description: "Single-use token from the provider's SDK" }
+                payment_method_id: { type: string, description: "Card brand id from the SDK, such as visa or master" }
+                issuer_id: { type: string }
+                installments: { type: integer, minimum: 1, maximum: 12, default: 1 }
+                payer_document: { type: string, description: "Payer CPF (digits); sent to the provider, never stored" }
+      responses:
+        "200": { $ref: "#/components/responses/Payment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/PaymentRequestInvalid" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /webhooks/mercado_pago:
+    post:
+      tags: [Webhooks]
+      summary: Mercado Pago payment notification
+      description: |
+        Called by Mercado Pago, not by clients. The `x-signature` header must be a valid HMAC-SHA256 of the
+        notification with `MERCADO_PAGO_WEBHOOK_SECRET`. The body is never trusted: a known payment is fetched again
+        from the provider in a background job. Unknown ids are acknowledged and ignored.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type: { type: string, example: payment }
+                action: { type: string, example: payment.updated }
+                data:
+                  type: object
+                  properties:
+                    id: { type: string }
+      responses:
+        "200": { description: Acknowledged }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /admin/payments:
+    get:
+      tags: [Admin]
+      summary: List every payment (requires admin with 2FA)
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, maximum: 100 } }
+        - { name: status, in: query, schema: { type: string, enum: [created, pending, approved, rejected, cancelled, refunded, charged_back] } }
+        - { name: user_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Page of payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminPayment" }
+                  meta: { $ref: "#/components/schemas/Pagination" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Admin]
+      summary: Create a payment for a confirmed user
+      description: The user then pays it with Pix or card. Audited as `payment.created`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, amount_cents, description]
+              properties:
+                user_id: { type: string, format: uuid }
+                amount_cents: { type: integer, minimum: 1, maximum: 100000000 }
+                description: { type: string, maxLength: 200 }
+      responses:
+        "201": { $ref: "#/components/responses/AdminPayment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /admin/payments/{id}/refund:
+    post:
+      tags: [Admin]
+      summary: Refund an approved payment in full
+      description: Audited as `payment.refunded`.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200": { $ref: "#/components/responses/AdminPayment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /notes:
     get:
       tags: [Notes]
@@ -903,6 +1102,7 @@ components:
         email_confirmed: { type: boolean }
         two_factor_enabled: { type: boolean }
         pending_email: { type: [string, "null"] }
+        time_zone: { type: string, example: America/Sao_Paulo, description: "IANA name. Only in the authenticated user's own profile (GET /me)" }
         password_set: { type: boolean, description: "Only in the authenticated user's own profile (GET /me)" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -917,6 +1117,8 @@ components:
             failed_login_attempts: { type: integer }
             locked_until: { type: [string, "null"], format: date-time }
             locked: { type: boolean }
+            deactivated_at: { type: [string, "null"], format: date-time }
+            deactivated: { type: boolean }
     AdminUserInput:
       type: object
       properties:
@@ -1008,6 +1210,38 @@ components:
       properties:
         title: { type: string, maxLength: 200 }
         body: { type: string, maxLength: 10000 }
+    Payment:
+      type: object
+      required: [id, amount_cents, currency, description, status]
+      properties:
+        id: { type: string, format: uuid }
+        amount_cents: { type: integer }
+        currency: { type: string, enum: [BRL] }
+        description: { type: string }
+        status: { type: string, enum: [created, pending, approved, rejected, cancelled, refunded, charged_back] }
+        status_detail: { type: [string, "null"], description: "Provider detail, such as cc_rejected_insufficient_amount" }
+        payment_method: { type: [string, "null"], enum: [pix, card, null] }
+        installments: { type: [integer, "null"] }
+        card_brand: { type: [string, "null"] }
+        card_last_four: { type: [string, "null"] }
+        pix_qr_code: { type: [string, "null"] }
+        pix_qr_code_base64: { type: [string, "null"] }
+        pix_ticket_url: { type: [string, "null"] }
+        pix_expires_at: { type: [string, "null"], format: date-time }
+        approved_at: { type: [string, "null"], format: date-time }
+        refunded_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AdminPayment:
+      allOf:
+        - $ref: "#/components/schemas/Payment"
+        - type: object
+          properties:
+            user_id: { type: string, format: uuid }
+            payable_type: { type: [string, "null"] }
+            payable_id: { type: [string, "null"], format: uuid }
+            provider: { type: [string, "null"] }
+            provider_payment_id: { type: [string, "null"] }
     Pagination:
       type: object
       properties:
@@ -1048,6 +1282,37 @@ components:
             type: object
             properties:
               data: { $ref: "#/components/schemas/Note" }
+    Payment:
+      description: Payment
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: "#/components/schemas/Payment" }
+    AdminPayment:
+      description: Payment as seen by an admin
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: "#/components/schemas/AdminPayment" }
+    Conflict:
+      description: The resource is not in a state that allows this action (`payment_not_payable`, `payment_not_refundable`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PaymentRequestInvalid:
+      description: The payment provider refused the request (`payment_request_invalid`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServiceUnavailable:
+      description: Payments are not configured or the provider is unreachable (`payments_unavailable`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     Message:
       description: Message
       content:
@@ -1080,6 +1345,14 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    AdminUser:
+      description: User as seen by an admin
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: "#/components/schemas/AdminUser" }
     Forbidden:
       description: Forbidden (includes `two_factor_setup_required` and `email_not_confirmed`)
       content:

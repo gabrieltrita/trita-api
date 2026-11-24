@@ -1,0 +1,73 @@
+name: Kamal deploy
+description: Builds the image, pushes it and deploys it with Kamal (or prepares the server and runs kamal setup), then checks /health
+
+inputs:
+  destination:
+    description: Kamal destination; leave empty for production
+    required: false
+    default: ""
+  setup:
+    description: Prepare the server (Docker, firewall) and run kamal setup instead of kamal deploy
+    required: false
+    default: "false"
+  ssh-private-key:
+    description: Private key of the deploy user
+    required: true
+  ssh-known-hosts:
+    description: known_hosts line of the server
+    required: true
+  health-url:
+    description: URL checked after the deploy
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        bundler-cache: true
+
+    - name: Set up QEMU for arm64 images
+      if: env.DEPLOY_ARCH == 'arm64'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
+    - name: Set up Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Configure SSH
+      shell: bash
+      env:
+        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        SSH_KNOWN_HOSTS: ${{ inputs.ssh-known-hosts }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+        chmod 600 ~/.ssh/id_deploy
+        printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+        printf 'Host *\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n' > ~/.ssh/config
+
+    - name: Prepare the server
+      if: inputs.setup == 'true'
+      shell: bash
+      env:
+        PREPARE_SCRIPT: ${{ github.action_path }}/prepare-server.sh
+      run: ssh "$DEPLOY_SSH_USER@$DEPLOY_HOST" 'bash -s' < "$PREPARE_SCRIPT"
+
+    - name: Deploy
+      shell: bash
+      env:
+        DESTINATION: ${{ inputs.destination }}
+        SETUP: ${{ inputs.setup }}
+      run: |
+        command=deploy
+        if [ "$SETUP" = "true" ]; then command=setup; fi
+        bin/kamal "$command" ${DESTINATION:+-d "$DESTINATION"}
+
+    - name: Check health
+      shell: bash
+      env:
+        HEALTH_URL: ${{ inputs.health-url }}
+      run: curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-connrefused "$HEALTH_URL"

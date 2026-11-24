@@ -1,0 +1,12 @@
+<% app = YAML.load_file("config/app.yml").fetch("shared") %>
+service: <%= app["slug"] %>-api-staging
+
+env:
+  clear:
+    ENABLE_API_DOCS: "true"
+
+accessories:
+  db:
+    env:
+      clear:
+        POSTGRES_DB: <%= app["slug"] %>_api_staging

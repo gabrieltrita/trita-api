@@ -12,6 +12,10 @@ class UserPolicy < ApplicationPolicy
 
   def reset_two_factor? = admin? && !own_record?
 
+  def deactivate? = admin? && !own_record?
+
+  def reactivate? = admin?
+
   class Scope < Scope
     def resolve
       user.admin? ? scope.all : scope.where(id: user.id)

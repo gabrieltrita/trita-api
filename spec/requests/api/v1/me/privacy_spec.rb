@@ -49,11 +49,20 @@ RSpec.describe "LGPD: consents and data export", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(response.headers["Content-Disposition"]).to eq(%(attachment; filename="#{Rails.configuration.x.app.slug}-data-#{Date.current.iso8601}.json"))
-      expect(json.keys).to include("exported_at", "profile", "consents", "sessions", "activity")
+      expect(json.keys).to include("exported_at", "profile", "consents", "sessions", "activity", "payments")
       expect(json.dig("profile", "email")).to eq("titular@example.com")
       expect(json["consents"].size).to eq(2)
       expect(json["profile"].keys).not_to include("password_digest", "otp_secret")
       expect(AuditLog.where(action: "user.data_exported", target_id: user.id)).to exist
+    end
+
+    it "includes the user's payments, which anonymization keeps as financial records" do
+      payment = create(:payment, user: user)
+      create(:payment)
+
+      get "/api/v1/me/export", headers: auth_headers(user)
+
+      expect(json["payments"]).to eq([ PaymentBlueprint.render_as_hash(payment).as_json ])
     end
 
     it "includes every PERSONAL_DATA association, serialized by its blueprint" do

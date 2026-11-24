@@ -10,12 +10,16 @@ class User < ApplicationRecord
 
   PERSONAL_DATA = %i[notes identities].freeze
 
+  DEFAULT_TIME_ZONE = "America/Sao_Paulo"
+  TIME_ZONES = TZInfo::Timezone.all_identifiers.to_set.freeze
+
   has_secure_password reset_token: false, validations: false
 
   has_many :refresh_tokens, dependent: :delete_all
   has_many :consents, dependent: :delete_all
   has_many :notes, dependent: :destroy
   has_many :identities, dependent: :destroy
+  has_many :payments, dependent: :restrict_with_exception
 
   encrypts :email, deterministic: true, downcase: true
   encrypts :first_name, :last_name, :phone, :unconfirmed_email, :otp_secret
@@ -43,12 +47,15 @@ class User < ApplicationRecord
   validates :first_name, presence: true, length: { maximum: 100 }
   validates :last_name, length: { maximum: 100 }
   validates :phone, length: { maximum: 20 }
+  validates :time_zone, inclusion: { in: TIME_ZONES }
   validates :password, length: { minimum: 8, maximum: 72 }, format: { with: PASSWORD_FORMAT, message: :weak_password }, if: -> { password.present? }
 
   validates :password, confirmation: true, allow_blank: true
   validate :password_or_identity_present
 
   scope :not_anonymized, -> { where(anonymized_at: nil) }
+  scope :deactivated, -> { where.not(deactivated_at: nil) }
+  scope :not_deactivated, -> { where(deactivated_at: nil) }
 
   before_save :track_password_change, if: :will_save_change_to_password_digest?
   after_update_commit :on_password_changed, if: :saved_change_to_password_digest?
@@ -108,6 +115,19 @@ class User < ApplicationRecord
     refresh_tokens.where(family_id: family_id, revoked_at: nil).update_all(revoked_at: Time.current, revoked_reason: reason)
   end
 
+  def deactivated?
+    deactivated_at.present?
+  end
+
+  def deactivate!
+    update_columns(deactivated_at: Time.current, updated_at: Time.current)
+    revoke_all_sessions!(reason: "deactivated")
+  end
+
+  def reactivate!
+    update_columns(deactivated_at: nil, updated_at: Time.current)
+  end
+
   def access_locked?
     locked_until.present? && locked_until.future?
   end
@@ -140,6 +160,7 @@ class User < ApplicationRecord
         first_name: "Deleted",
         last_name: "user",
         phone: nil,
+        time_zone: DEFAULT_TIME_ZONE,
         unconfirmed_email: nil,
         otp_secret: nil,
         otp_enabled_at: nil,

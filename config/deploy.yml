@@ -1,0 +1,92 @@
+<% app = YAML.load_file("config/app.yml").fetch("shared") %>
+service: <%= app["slug"] %>-api
+image: <%= ENV.fetch("KAMAL_REGISTRY_USERNAME").downcase %>/<%= app["slug"] %>-api
+
+servers:
+  web:
+    hosts:
+      - <%= ENV.fetch("DEPLOY_HOST") %>
+  job:
+    hosts:
+      - <%= ENV.fetch("DEPLOY_HOST") %>
+    cmd: bundle exec sidekiq -C config/sidekiq.yml
+
+ssh:
+  user: <%= ENV.fetch("DEPLOY_SSH_USER", "root") %>
+
+proxy:
+  ssl: true
+  host: <%= ENV.fetch("APP_HOST") %>
+  app_port: 3000
+  healthcheck:
+    path: /up
+    interval: 3
+    timeout: 3
+
+registry:
+  server: ghcr.io
+  username: <%= ENV.fetch("KAMAL_REGISTRY_USERNAME") %>
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: <%= ENV.fetch("DEPLOY_ARCH", "amd64") %>
+
+env:
+  clear:
+    APP_HOST: <%= ENV.fetch("APP_HOST").to_json %>
+    APP_HOSTS: <%= ENV.fetch("APP_HOST").to_json %>
+    CORS_ORIGINS: <%= ENV.fetch("CORS_ORIGINS").to_json %>
+    FRONTEND_URL: <%= ENV.fetch("FRONTEND_URL").to_json %>
+    MAILER_FROM: <%= ENV.fetch("MAILER_FROM").to_json %>
+    SMTP_ADDRESS: <%= ENV.fetch("SMTP_ADDRESS").to_json %>
+    SMTP_PORT: <%= ENV.fetch("SMTP_PORT", "587").to_json %>
+    GOOGLE_CLIENT_IDS: <%= ENV.fetch("GOOGLE_CLIENT_IDS", "").to_json %>
+    APPLE_CLIENT_IDS: <%= ENV.fetch("APPLE_CLIENT_IDS", "").to_json %>
+  secret:
+    - SECRET_KEY_BASE
+    - JWT_SECRET
+    - AR_ENCRYPTION_PRIMARY_KEY
+    - AR_ENCRYPTION_DETERMINISTIC_KEY
+    - AR_ENCRYPTION_KEY_DERIVATION_SALT
+    - DATABASE_URL
+    - REDIS_URL
+    - SIDEKIQ_REDIS_URL
+    - SIDEKIQ_WEB_USERNAME
+    - SIDEKIQ_WEB_PASSWORD
+    - SMTP_USERNAME
+    - SMTP_PASSWORD
+    - SENTRY_DSN
+    - APPLE_TEAM_ID
+    - APPLE_KEY_ID
+    - APPLE_PRIVATE_KEY
+    - MERCADO_PAGO_ACCESS_TOKEN
+    - MERCADO_PAGO_WEBHOOK_SECRET
+
+accessories:
+  db:
+    image: postgres:17
+    host: <%= ENV.fetch("DEPLOY_HOST") %>
+    env:
+      clear:
+        POSTGRES_USER: postgres
+        POSTGRES_DB: <%= app["slug"] %>_api_production
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - data:/var/lib/postgresql/data
+  redis:
+    image: redis:7
+    host: <%= ENV.fetch("DEPLOY_HOST") %>
+    cmd: sh -c 'redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"'
+    env:
+      secret:
+        - REDIS_PASSWORD
+    directories:
+      - data:/data
+
+aliases:
+  console: app exec --interactive --reuse "bin/rails console"
+  shell: app exec --interactive --reuse bash
+  logs: app logs -f
+  dbc: app exec --interactive --reuse "bin/rails dbconsole"

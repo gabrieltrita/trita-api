@@ -2,13 +2,16 @@ module Api
   module V1
     module Admin
       class UsersController < BaseController
-        before_action :set_user, only: %i[show update destroy unlock reset_two_factor]
+        STATUS_SCOPES = { "active" => :not_deactivated, "deactivated" => :deactivated }.freeze
+
+        before_action :set_user, only: %i[show update destroy unlock reset_two_factor deactivate reactivate]
 
         def index
           authorize User
           scope = policy_scope(User).not_anonymized.order(created_at: :desc)
           scope = scope.where(role: params[:role]) if params[:role].present? && User.roles.key?(params[:role])
           scope = scope.where(email: params[:email].to_s) if params[:email].present?
+          scope = scope.public_send(STATUS_SCOPES[params[:status]]) if STATUS_SCOPES.key?(params[:status])
 
           pagy, users = pagy(scope)
           render json: { data: UserBlueprint.render_as_hash(users, view: :admin), meta: pagination_meta(pagy) }
@@ -66,6 +69,26 @@ module Api
           AuditLog.record!("two_factor.reset", target: @user)
           UserMailer.two_factor_disabled(@user).deliver_later
           head :no_content
+        end
+
+        def deactivate
+          authorize @user
+          unless @user.deactivated?
+            @user.deactivate!
+            AuditLog.record!("user.deactivated", target: @user)
+            UserMailer.account_deactivated(@user).deliver_later
+          end
+          render json: { data: UserBlueprint.render_as_hash(@user, view: :admin) }
+        end
+
+        def reactivate
+          authorize @user
+          if @user.deactivated?
+            @user.reactivate!
+            AuditLog.record!("user.reactivated", target: @user)
+            UserMailer.account_reactivated(@user).deliver_later
+          end
+          render json: { data: UserBlueprint.render_as_hash(@user, view: :admin) }
         end
 
         private

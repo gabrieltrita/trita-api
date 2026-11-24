@@ -166,6 +166,13 @@ RSpec.describe "Tokens, sessions and logout", type: :request do
       post "/api/v1/auth/refresh", as: :json
       expect(response).to have_http_status(:bad_request)
     end
+
+    it "answers missing_token when there is no refresh cookie" do
+      post "/api/v1/auth/refresh", headers: cookie_header, as: :json
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(json.dig("error", "code")).to eq("missing_token")
+    end
   end
 
   describe "DELETE /api/v1/auth/logout" do

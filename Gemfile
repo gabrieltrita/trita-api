@@ -9,7 +9,7 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "bcrypt", "~> 3.1.7"
 gem "jwt", "~> 3.3"
 
-gem "rotp", "~> 6.3"
+gem "rotp", "~> 6.4"
 
 gem "pundit", "~> 2.4"
 
@@ -22,7 +22,7 @@ gem "sidekiq", "~> 8.1"
 gem "sidekiq-cron", "~> 2.0"
 gem "connection_pool", "~> 3.0"
 
-gem "sentry-ruby", "~> 7.1"
+gem "sentry-ruby", "~> 7.2"
 gem "sentry-rails", "~> 7.1"
 gem "sentry-sidekiq", "~> 7.1"
 
@@ -42,6 +42,10 @@ group :development, :test do
   gem "rspec-rails", "~> 8.0"
   gem "factory_bot_rails"
   gem "faker"
+end
+
+group :development do
+  gem "kamal", "~> 2.12", require: false
 end
 
 group :test do

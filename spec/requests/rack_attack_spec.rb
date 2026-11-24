@@ -29,6 +29,20 @@ RSpec.describe "Rate limiting (Rack::Attack)", type: :request do
     expect(response).to have_http_status(:too_many_requests)
   end
 
+  it "throttles payment attempts by IP" do
+    10.times { post "/api/v1/payments/#{SecureRandom.uuid}/pix", as: :json, env: { "REMOTE_ADDR" => "10.6.6.6" } }
+    post "/api/v1/payments/#{SecureRandom.uuid}/card", params: { card_token: "t", payment_method_id: "visa" }, as: :json, env: { "REMOTE_ADDR" => "10.6.6.6" }
+    expect(response).to have_http_status(:too_many_requests)
+
+    post "/api/v1/payments/#{SecureRandom.uuid}/pix", as: :json, env: { "REMOTE_ADDR" => "10.6.6.6" }
+    expect(response).to have_http_status(:too_many_requests)
+  end
+
+  it "throttles webhooks by IP" do
+    121.times { post "/api/v1/webhooks/mercado_pago", params: {}, as: :json, env: { "REMOTE_ADDR" => "10.7.7.7" } }
+    expect(response).to have_http_status(:too_many_requests)
+  end
+
   it "throttles social login by IP" do
     10.times { post "/api/v1/auth/oauth/google", params: { id_token: "x" }, as: :json, env: { "REMOTE_ADDR" => "10.3.3.3" } }
     post "/api/v1/auth/oauth/google", params: { id_token: "x" }, as: :json, env: { "REMOTE_ADDR" => "10.3.3.3" }
